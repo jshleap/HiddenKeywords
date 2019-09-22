@@ -34,14 +34,8 @@ with open(os.path.join(parent_dir, 'resources', 'stopwords.txt')) as stpw:
     stopwords = set(stopwords.words('english') + stpw.read().strip().split(
         '\n') + list(whitespace) + list(punctuation))
 
-google_token = "8TLaMAUH63kVWRHA8D0N8w"
-google_client= "565-190-4905"
-google_API = 'AIzaSyAYuIZtLbI9ZjJfwZdwnfU6Wozha0OgNzw'
 
-Client_ID = '778532695491-n7bjt3v4iojn118lrrcvtenpaalospp4.apps.googleusercontent.com'
-Client_secret = 'qIF1QiY2B9ey9QVuPjXLm1JD'
-
-def get_synonyms(word, merriam_api_key='c9473e1d-4110-4ee3-a101-778858363e9f'):
+def get_synonyms(word):
     """
     Given a word return similar words
     TODO: Include the API key as variable
@@ -51,7 +45,7 @@ def get_synonyms(word, merriam_api_key='c9473e1d-4110-4ee3-a101-778858363e9f'):
     if ' ' in word:
         word = '+'.join(word.split())
     rest = "https://www.dictionaryapi.com/api/v3/references/thesaurus/json/"
-    rest += word + "?key=" + merriam_api_key
+    rest += word + "?key=c9473e1d-4110-4ee3-a101-778858363e9f"
     js = requests.get(rest)
     js = json.load(BytesIO(js.content))
     return set(chain(*[list(chain(*req['meta']['syns'])) for req in js]))

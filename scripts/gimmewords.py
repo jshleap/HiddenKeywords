@@ -26,15 +26,18 @@ from nltk.probability import FreqDist
 from nltk.tokenize import RegexpTokenizer
 from sklearn.feature_extraction.text import CountVectorizer, TfidfTransformer
 from gensim.models.phrases import Phrases, Phraser
-from gensim.models import Word2Vec
+from gensim.models import Word2Vec, wrappers, CoherenceModel
 from gensim.utils import simple_preprocess
 from gensim.summarization import keywords
+from gensim.corpora import Dictionary
 import requests.exceptions
 from urllib.parse import urlsplit
 from collections import deque
 from joblib import Parallel, delayed
 from chardet.universaldetector import UniversalDetector
 import dask
+import time
+import dill
 
 plt.style.use('ggplot')
 parent_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -57,6 +60,7 @@ def detect_encoding(filename):
                 break
         detector.close()
     return detector.result['encoding']
+
 
 def get_synonyms(word):
     """
@@ -87,7 +91,8 @@ def pre_clean(text):
     text = re.sub("_.+\s", "", text)
     text = re.sub('\S*@\S*\s?', '', text)
     text = re.sub('\s+', ' ', text)
-    text = [x for x in simple_preprocess(text) if x not in stopwords]
+    text = [x for x in simple_preprocess(text,deacc=True) if x not in
+            stopwords]
     return ' '.join(text)
 
 
@@ -229,12 +234,6 @@ class IdentifyWords(object):
         self.max_df = max_df
         self.min_df = min_df
         self.max_features = max_features
-        self.vectorize = CountVectorizer(max_df=max_df, stop_words=stopwords,
-                                         lowercase=True,
-                                         max_features=max_features)
-        self.w2v = Word2Vec(min_count=20, window=2, size=300, sample=6e-5,
-                            alpha=0.03, min_alpha=0.0007, negative=20,
-                            workers=self.cores - 1)
         self.clean = None
         self.keywords = None
         self.pre_keywords = [keywords(x, deacc=True) for x in self.docs]
@@ -242,12 +241,13 @@ class IdentifyWords(object):
         self.gkp = pd.read_csv(stats, skiprows=[0,1], encoding=detect_encoding(
             stats), sep='\t')
         self.nlp = spacy.load('en', disable=['ner', 'parser'])
-        if model == 'tf-idf':
-            self.text_counts = docs
+        self.text_counts = docs
+        if model == 'tf_idf':
             self.tf_idf()
-        else:
-            self.clean_it()
+        elif model == 'word2vec':
             self.word2vec()
+        else:
+            self.lda()
 
     @property
     def text_counts(self):
@@ -255,10 +255,13 @@ class IdentifyWords(object):
 
     @text_counts.setter
     def text_counts(self, _):
-        self.__text_counts = self.vectorize.fit_transform(self.docs)
-        self.vocabulary = self.vectorize.get_feature_names()
+        vectorize = CountVectorizer(max_df=self.max_df, stop_words=stopwords,
+                                    lowercase=True,
+                                    max_features=self.max_features)
+        self.__text_counts = vectorize.fit_transform(self.docs)
+        self.vocabulary = vectorize.get_feature_names()
         print('Top 10 words in vocabulary')
-        print(list(self.vectorize.vocabulary_.keys())[:10])
+        print(list(vectorize.vocabulary_.keys())[:10])
 
     def clean_it(self):
         """
@@ -276,13 +279,92 @@ class IdentifyWords(object):
         Perform word2vec processing
         :return:
         """
-        sent = [row.split() for row in self.clean['clean']]
-        bigram = Phraser(Phrases(sent, min_count=30, progress_per=10000))
-        sentences = bigram[sent]
-        self.w2v.build_vocab(sentences, progress_per=10000)
-        self.w2v.train(sentences, total_examples=self.w2v.corpus_count,
-                       epochs=30, report_delay=1)
-        self.w2v.init_sims(replace=True)
+        self.clean_it()
+        w2v = Word2Vec(min_count=20, window=2, size=300, sample=6e-5,
+                       alpha=0.03, min_alpha=0.0007, negative=20,
+                       workers=self.cores - 1)
+        sent = [simple_preprocess(row) for row in self.clean['clean']]
+        min_count = max(1, int(len(sent)*self.min_df))
+        sentences = self.make_ngrams(sent, min_count, self.nlp)
+        w2v.build_vocab(sentences, progress_per=10000)
+        w2v.train(sentences, total_examples=w2v.corpus_count, epochs=30,
+                  report_delay=1)
+        w2v.init_sims(replace=True)
+
+        return w2v
+
+    @staticmethod
+    def make_ngrams(sent, min_count, nlp):
+        """
+        Create bi and trigrams using spacy nlp and gensim Phrases
+        :param sent: list of preprocessed corpora
+        :param min_count: minimum number of words to be taken into account
+        :param nlp: instance of spacy nlp
+        :return: sentences
+        """
+        bigram = Phrases(sent, min_count=min_count, threshold=100)
+        trigram = Phrases(bigram[sent], threshold=100)
+        bigram_mod = Phraser(bigram)
+        trigram_mod = Phraser(trigram)
+        ngrams = [bigram_mod[doc] for doc in sent] + [
+            trigram_mod[bigram_mod[doc]] for doc in sent]
+        return [[token.lemma_ for token in nlp(" ".join(gram)) if token.pos_ in
+                 ['NOUN', 'ADJ', 'VERB', 'ADV']] for gram in ngrams]
+
+    def lda(self):
+        self.clean_it()
+        sent = [simple_preprocess(row) for row in self.clean['clean']]
+        min_count = max(1, int(len(sent) * self.min_df))
+        sentences = self.make_ngrams(sent, min_count, self.nlp)
+        id2word = Dictionary(sentences)
+        corpus = [id2word.doc2bow(text) for text in sentences]
+        # Download File: http://mallet.cs.umass.edu/dist/mallet-2.0.8.zip
+        mallet_path = os.path.abspath(os.path.join(__file__, os.path.pardir))
+        ldamallet = wrappers.LdaMallet(mallet_path, corpus=corpus,
+                                       num_topics=self.n, id2word=id2word)
+        self.topics = (ldamallet.show_topics(formatted=False))
+        coherence_model_ldamallet = CoherenceModel(model=ldamallet,
+                                                   texts=sentences,
+                                                   dictionary=id2word,
+                                                   coherence='c_v')
+        self.coherence_ldamallet = coherence_model_ldamallet.get_coherence()
+        print('\nCoherence Score: ', self.coherence_ldamallet)
+        self.keywords = self.format_topics_sentences(
+            ldamodel=ldamallet, corpus=corpus, texts=sentences)
+
+
+    @staticmethod
+    def format_topics_sentences(ldamodel, corpus, texts):
+        """
+        Get LDA results into a nice table
+        https://www.machinelearningplus.com/nlp/topic-modeling-gensim-python/
+        :param ldamodel: Trained model instace
+        :param corpus: list of bows
+        :param texts: original training set of ngrams
+        :return:
+        """
+        # Init output
+        sent_topics_df = pd.DataFrame()
+
+        # Get main topic in each document
+        for i, row in enumerate(ldamodel[corpus]):
+            row = sorted(row, key=lambda x: (x[1]), reverse=True)
+            for j, (topic_num, prop_topic) in enumerate(row):
+                if j == 0:  # => dominant topic
+                    wp = ldamodel.show_topic(topic_num)
+                    topic_keywords = ", ".join([word for word, prop in wp])
+                    sent_topics_df = sent_topics_df.append(pd.Series(
+                        [int(topic_num), round(prop_topic, 4),
+                         topic_keywords]), ignore_index=True)
+                else:
+                    break
+        sent_topics_df.columns = ['Dominant_Topic', 'Perc_Contribution',
+                                  'Topic_Keywords']
+
+        # Add original text to the end of the output
+        contents = pd.Series(texts)
+        sent_topics_df = pd.concat([sent_topics_df, contents], axis=1)
+        return sent_topics_df
 
     def frequency_explorer(self, outname):
         """
@@ -304,9 +386,10 @@ class IdentifyWords(object):
         self.tfidf_transformer = TfidfTransformer(smooth_idf=True,
                                                   use_idf=True)
         self.tfidf_transformer.fit(self.text_counts)
-        self.df_idf = pd.DataFrame(self.tfidf_transformer.idf_,
-                                   index=self.vocabulary, columns=["weights"])
+        df_idf = pd.DataFrame(self.tfidf_transformer.idf_,
+                              index=self.vocabulary, columns=["weights"])
         self.keywords = self.df_idf.nlargest(n=self.n, columns="weights")
+        return df_idf
 
 
 def scrape_paperspace(url='https://blog.paperspace.com/tag/machine-learning/'):
@@ -333,18 +416,27 @@ def main(query, stats, num, stop, max_df, min_df, max_features, n_keywords,
             text = [line for line in p]
             land = [line for line in l]
     else:
+        now = time.time()
         pages = GetPages(query, num, stop)
+        elapsed = (time.time() - now) / 60
+        print("Crawling done in", elapsed, 'minutes')
+        to_str = lambda x: x if isinstance(x, str) else '\n'.join(x)
         text = pages.text
-        land = pages.landing_page
+        land = to_str(pages.landing_page)
         with open('pages.dmp', 'w') as p, open('landing.dmp', 'w') as l:
-            p.write('\n'.join(text))
-            l.write('\n'.join(land))
+            p.write(to_str(text))
+            l.write(land)
     iw = IdentifyWords(text, stats, land, max_df, min_df, max_features,
                        n_keywords, model=model)
-    #tfidf.frequency_explorer(plot_fn)
+    with open('id.pkcl', 'wb') as p:
+        dill.dump(iw, p)
+    iw.__getattribute__(model)()
+    if plot_fn is not None:
+        iw.frequency_explorer(plot_fn)
     print('pre-KeyWords\n', iw.pre_keywords)
     print('Landing pages KeyWords\n', iw.landing_kw)
     print('%s Keywords\n' % model, iw.keywords)
+    print("Done")
 
 
 if __name__ == '__main__':
@@ -369,10 +461,11 @@ if __name__ == '__main__':
                              'max_features ordered by term frequency')
     parser.add_argument('-n', '--n_keywords', type=int, default=10,
                         help='Maximum number of keywords to retrieve')
-    parser.add_argument('-p', '--plot_fn', type=str, default='freq_plot.pdf',
+    parser.add_argument('-p', '--plot_fn', type=str, default=None,
                         help='Name of the plot file')
     parser.add_argument('-M', '--model', default='word2vec',
-                        help='NLP model to fit')
+                        help='NLP model to fit. Available tf_idf, word2vec '
+                             'and lda')
     args = parser.parse_args()
     main(query=args.query, stats=args.stats, num=args.max_results,
          stop=args.stop, max_df=args.max_df, plot_fn=args.plot_fn,

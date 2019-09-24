@@ -27,6 +27,14 @@ from nltk.tokenize import RegexpTokenizer
 from sklearn.feature_extraction.text import CountVectorizer, TfidfTransformer
 from gensim.models.phrases import Phrases, Phraser
 from gensim.models import Word2Vec
+from gensim.utils import simple_preprocess
+from gensim.summarization import keywords
+import requests.exceptions
+from urllib.parse import urlsplit
+from collections import deque
+from joblib import Parallel, delayed
+from chardet.universaldetector import UniversalDetector
+import dask
 
 plt.style.use('ggplot')
 parent_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -34,6 +42,21 @@ with open(os.path.join(parent_dir, 'resources', 'stopwords.txt')) as stpw:
     stopwords = set(stopwords.words('english') + stpw.read().strip().split(
         '\n') + list(whitespace) + list(punctuation))
 
+
+def detect_encoding(filename):
+    """
+    Detect encoding
+    :param filename: name of file
+    :return:
+    """
+    detector = UniversalDetector()
+    with open(filename, 'rb') as socket:
+        for line in socket:
+            detector.feed(line)
+            if detector.done:
+                break
+        detector.close()
+    return detector.result['encoding']
 
 def get_synonyms(word):
     """
@@ -62,49 +85,132 @@ def pre_clean(text):
     text = re.sub("<!--?.*?-->", "", text)
     text = re.sub("(\\d|\\W)+", " ", text)
     text = re.sub("_.+\s", "", text)
-    return text
+    text = re.sub('\S*@\S*\s?', '', text)
+    text = re.sub('\s+', ' ', text)
+    text = [x for x in simple_preprocess(text) if x not in stopwords]
+    return ' '.join(text)
 
 
 class GetPages(object):
-    def __init__(self, query, num=100, stop=10):
+    def __init__(self, query, num=20, stop=5, depth=3):
         self.query = query
         self.num = num
         self.stop = stop
-        self.headers = {'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X'
-                                      ' 10_11_5) AppleWebKit/537.36 (KHTML, '
-                                      'like Gecko) Chrome / 50.0.2661.102 '
-                                      'Safari / 537.36'}
+        self.depth = depth
+        self.gsearch = search(self.query, tld="co.in", num=self.num,
+                              stop=self.stop, pause=2)
+        self.landing_page = next(self.gsearch)
         self.pages = []
         self.text = []
-        self.search_google()
 
-    def search_google(self):
+    @property
+    def landing_page(self):
+        return self.__landing_page
+
+    @landing_page.setter
+    def landing_page(self, url):
+        results = [dask.delayed(self.read_url)(u) for u in self.crawl(url)]
+        out = dask.compute(*results)
+        self.__landing_page = ' '.join(out)
+
+    @property
+    def text(self):
+        return self.__text
+
+    @text.setter
+    def text(self, _):
+        results = [dask.delayed(self.search_google)(url) for url in self.gsearch]
+        out = dask.compute(*results)
+        self.__text, self.pages = zip(*out)
+
+    @staticmethod
+    def crawl(url, depth=10):
+        new_urls = deque([url])
+        processed_urls = set()
+        local_urls = set()
+        foreign_urls = set()
+        broken_urls = set()
+        count = 0
+        while len(new_urls) != 0 and count <= depth:
+            count += 1
+            url = new_urls.popleft()
+            processed_urls.add(url)
+            print("Processing %s" % url)
+
+            try:
+                response = requests.get(url)
+            except(
+            requests.exceptions.MissingSchema, requests.exceptions.ConnectionError,
+            requests.exceptions.InvalidURL,
+            requests.exceptions.InvalidSchema,
+            requests.exceptions.Timeout):
+                broken_urls.add(url)
+                continue
+            parts = urlsplit(url)
+            base = "{0.netloc}".format(parts)
+            strip_base = base.replace("www.", "")
+            base_url = "{0.scheme}://{0.netloc}".format(parts)
+            path = url[:url.rfind('/')+1] if '/' in parts.path else url
+            soup = BeautifulSoup(response.text, "lxml")
+            for link in soup.find_all('a'):
+                anchor = link.attrs["href"] if "href" in link.attrs else ''
+                if anchor.startswith('/'):
+                    local_link = base_url + anchor
+                    local_urls.add(local_link)
+                elif strip_base in anchor:
+                    local_urls.add(anchor)
+                elif not anchor.startswith('http'):
+                    local_link = path + anchor
+                    local_urls.add(local_link)
+                else:
+                    foreign_urls.add(anchor)
+            for i in local_urls:
+                if not i in new_urls and not i in processed_urls:
+                    new_urls.append(i)
+        return local_urls
+
+    def search_google(self, url):
         """
-        Get a set of texts from google given a query
-
+        Get a set of texts from google given a query result (url)
+        :param url: url to process
         :return: list of blogs' text
         """
-        for j in search(self.query, tld="co.in", num=self.num, stop=self.stop,
-                        pause=2):
-            self.pages.append(j)
-            req = requests.get(j, headers=self.headers)
+        urls = self.crawl(url, depth=self.depth)
+        docs = ' '.join([self.read_url(u) for u in urls])
+        return url, docs
+
+    @staticmethod
+    def read_url(url):
+        headers = {'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X '
+                                 '10_11_5) AppleWebKit/537.36 (KHTML, like '
+                                 'Gecko) Chrome / 50.0.2661.102 Safari / '
+                                 '537.36'}
+        try:
+            req = requests.get(url, headers=headers)
             html_doc = req.content
             soup = BeautifulSoup(html_doc.decode('ascii', errors='ignore'),
                                  'html.parser')
             try:
-                self.text.append('\n'.join([pre_clean(x.get_text()) for x in
-                                            soup.find_all('body')]))
+                return ' '.join([pre_clean(x.get_text()) for x in soup.find_all(
+                    'main')])
             except AttributeError:
                 print(req.status_code)
                 print(html_doc)
+        except(
+                requests.exceptions.MissingSchema,
+                requests.exceptions.ConnectionError,
+                requests.exceptions.InvalidURL,
+                requests.exceptions.InvalidSchema,
+                requests.exceptions.Timeout):
+            return ''
 
 
 class IdentifyWords(object):
     """
     Use NLP's TF-IDF to identify keywords of a set of documents
     """
-    def __init__(self, docs, max_df=0.9, min_df=0.01, max_features=None,
-                 n_keywords=10, word2vec=False):
+    def __init__(self, docs, stats, landing_doc, max_df=0.9, min_df=0.01,
+                 max_features=None, n_keywords=10, model='word2vec'):
         """
         Constructor
         :param docs: list of strings with the documents to analyze
@@ -131,8 +237,12 @@ class IdentifyWords(object):
                             workers=self.cores - 1)
         self.clean = None
         self.keywords = None
+        self.pre_keywords = [keywords(x, deacc=True) for x in self.docs]
+        self.landing_kw = keywords(landing_doc)
+        self.gkp = pd.read_csv(stats, skiprows=[0,1], encoding=detect_encoding(
+            stats))
         self.nlp = spacy.load('en', disable=['ner', 'parser'])
-        if not word2vec:
+        if model == 'tf-idf':
             self.text_counts = docs
             self.tf_idf()
         else:
@@ -216,17 +326,32 @@ def scrape_paperspace(url='https://blog.paperspace.com/tag/machine-learning/'):
     return documents
 
 
-def main(query, num, stop, max_df, min_df, max_features, n_keywords, plot_fn):
-    pages = GetPages(query, num, stop)
-    tfidf = IdentifyWords(pages.text, max_df, min_df, max_features,
-                          n_keywords)
-    tfidf.frequency_explorer(plot_fn)
-    print(tfidf.keywords)
+def main(query, stats, num, stop, max_df, min_df, max_features, n_keywords,
+         plot_fn, model):
+    if os.path.isfile('pages.dmp'):
+        with open('pages.dmp') as p, open('landing.dmp') as l:
+            text = [line for line in p]
+            land = [line for line in l]
+    else:
+        pages = GetPages(query, num, stop)
+        text = pages.text
+        land = pages.landing_page
+        with open('pages.dmp', 'w') as p, open('landing.dmp', 'w') as l:
+            p.write(text)
+            l.write(land)
+    iw = IdentifyWords(text, stats, land, max_df, min_df, max_features,
+                       n_keywords, model=model)
+    #tfidf.frequency_explorer(plot_fn)
+    print('pre-KeyWords\n', iw.pre_keywords)
+    print('Landing pages KeyWords\n', iw.landing_kw)
+    print('%s Keywords\n' % model, iw.keywords)
+
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(
         prog='PROG', formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument('query', help='Original query')
+    parser.add_argument('stats', help='Google Keyword Planner filename')
     parser.add_argument('-x', '--max_results', type=int, default=20,
                         help='Maximum number of results from google query')
     parser.add_argument('-s', '--stop', type=int, default=10,
@@ -246,8 +371,11 @@ if __name__ == '__main__':
                         help='Maximum number of keywords to retrieve')
     parser.add_argument('-p', '--plot_fn', type=str, default='freq_plot.pdf',
                         help='Name of the plot file')
+    parser.add_argument('-M', '--model', default='word2vec',
+                        help='NLP model to fit')
     args = parser.parse_args()
-    main(query=args.query, num=args.max_results, stop=args.stop,
-         max_df=args.max_df, min_df=args.min_df, max_features=args.max_features,
-         n_keywords=args.n_keywords, plot_fn=args.plot_fn)
+    main(query=args.query, stats=args.stats, num=args.max_results,
+         stop=args.stop, max_df=args.max_df, plot_fn=args.plot_fn,
+         model=args.model, max_features=args.max_features, min_df=args.min_df,
+         n_keywords=args.n_keywords)
 

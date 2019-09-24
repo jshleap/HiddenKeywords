@@ -18,5 +18,10 @@ related, yet potentially useful words out for grabs. This tool
 aims to help you reduce the cost of your campaigns while keeping
 track of new topics and associated keywords.
 
+## AUTHENTICATION
+Follow google instructions here: https://developers.google.com/adwords/api/docs/guides/first-api-call https://github.com/googleads/googleads-python-lib
+
+Googleads.yaml should be in your home directory.
+
 ## How does it work?
 ...

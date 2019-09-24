@@ -177,7 +177,7 @@ class GetPages(object):
         """
         urls = self.crawl(url, depth=self.depth)
         docs = ' '.join([self.read_url(u) for u in urls])
-        return url, docs
+        return docs, url
 
     @staticmethod
     def read_url(url):
@@ -240,7 +240,7 @@ class IdentifyWords(object):
         self.pre_keywords = [keywords(x, deacc=True) for x in self.docs]
         self.landing_kw = keywords(landing_doc)
         self.gkp = pd.read_csv(stats, skiprows=[0,1], encoding=detect_encoding(
-            stats))
+            stats), sep='\t')
         self.nlp = spacy.load('en', disable=['ner', 'parser'])
         if model == 'tf-idf':
             self.text_counts = docs
@@ -337,8 +337,8 @@ def main(query, stats, num, stop, max_df, min_df, max_features, n_keywords,
         text = pages.text
         land = pages.landing_page
         with open('pages.dmp', 'w') as p, open('landing.dmp', 'w') as l:
-            p.write(text)
-            l.write(land)
+            p.write('\n'.join(text))
+            l.write('\n'.join(land))
     iw = IdentifyWords(text, stats, land, max_df, min_df, max_features,
                        n_keywords, model=model)
     #tfidf.frequency_explorer(plot_fn)

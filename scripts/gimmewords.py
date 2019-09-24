@@ -42,8 +42,10 @@ import dill
 plt.style.use('ggplot')
 parent_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 with open(os.path.join(parent_dir, 'resources', 'stopwords.txt')) as stpw:
-    stopwords = set(stopwords.words('english') + stpw.read().strip().split(
-        '\n') + list(whitespace) + list(punctuation))
+    stopwords = set(stopwords.words('english'))
+    stopwords.add(simple_preprocess(stpw.read().strip().replace('\n', ' '),
+                                    deacc=True))
+    stopwords.add(list(whitespace) + list(punctuation))
 
 
 def detect_encoding(filename):
@@ -226,6 +228,9 @@ class IdentifyWords(object):
         :param max_features: build a vocabulary that only consider the top
         max_features ordered by term frequency
         """
+        opt = dict(deacc=True, scores=True)
+        df_opt = dict(skiprows=[0, 1], encoding=detect_encoding(stats),
+                      sep='\t')
         self.cores = multiprocessing.cpu_count()
         self.tokenizer = RegexpTokenizer(r'\w+')
         self.vocabulary = None
@@ -236,18 +241,12 @@ class IdentifyWords(object):
         self.max_features = max_features
         self.clean = None
         self.keywords = None
-        self.pre_keywords = [keywords(x, deacc=True) for x in self.docs]
-        self.landing_kw = keywords(landing_doc)
-        self.gkp = pd.read_csv(stats, skiprows=[0,1], encoding=detect_encoding(
-            stats), sep='\t')
+        self.pre_keywords = [keywords(x, **opt) for x in self.docs]
+        self.landing_kw = keywords(landing_doc, **opt)
+        self.gkp = pd.read_csv(stats, **df_opt)
         self.nlp = spacy.load('en', disable=['ner', 'parser'])
         self.text_counts = docs
-        if model == 'tf_idf':
-            self.tf_idf()
-        elif model == 'word2vec':
-            self.word2vec()
-        else:
-            self.lda()
+        self.model = model
 
     @property
     def text_counts(self):
@@ -290,7 +289,6 @@ class IdentifyWords(object):
         w2v.train(sentences, total_examples=w2v.corpus_count, epochs=30,
                   report_delay=1)
         w2v.init_sims(replace=True)
-
         return w2v
 
     @staticmethod
@@ -414,7 +412,7 @@ def main(query, stats, num, stop, max_df, min_df, max_features, n_keywords,
     if os.path.isfile('pages.dmp'):
         with open('pages.dmp') as p, open('landing.dmp') as l:
             text = [line for line in p]
-            land = [line for line in l]
+            land = ' '.join([line for line in l])
     else:
         now = time.time()
         pages = GetPages(query, num, stop)
@@ -428,9 +426,9 @@ def main(query, stats, num, stop, max_df, min_df, max_features, n_keywords,
             l.write(land)
     iw = IdentifyWords(text, stats, land, max_df, min_df, max_features,
                        n_keywords, model=model)
-    with open('id.pkcl', 'wb') as p:
-        dill.dump(iw, p)
     iw.__getattribute__(model)()
+    with open('iw.pkcl', 'wb') as p:
+        dill.dump(iw, p)
     if plot_fn is not None:
         iw.frequency_explorer(plot_fn)
     print('pre-KeyWords\n', iw.pre_keywords)

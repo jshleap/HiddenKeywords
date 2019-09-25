@@ -231,11 +231,12 @@ class IdentifyWords(object):
         opt = dict(deacc=True, scores=True)
         df_opt = dict(skiprows=[0, 1], encoding=detect_encoding(stats),
                       sep='\t')
+        self.gkp = pd.read_csv(stats, **df_opt)
         self.cores = multiprocessing.cpu_count()
         self.tokenizer = RegexpTokenizer(r'\w+')
         self.vocabulary = None
         self.n = n_keywords
-        self.docs = docs
+        self.docs = docs + [' '.join(self.gkp.Keywords.tolist())]
         self.max_df = max_df
         self.min_df = min_df
         self.max_features = max_features
@@ -243,7 +244,6 @@ class IdentifyWords(object):
         self.keywords = None
         self.pre_keywords = [keywords(x, **opt) for x in self.docs]
         self.landing_kw = keywords(landing_doc, **opt)
-        self.gkp = pd.read_csv(stats, **df_opt)
         self.nlp = spacy.load('en', disable=['ner', 'parser'])
         self.text_counts = docs
         self.model = model

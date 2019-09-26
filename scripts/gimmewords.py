@@ -10,7 +10,7 @@ __email__ = 'jshleap@gmail.com'
 import multiprocessing
 import argparse
 import json
-import os
+from os.path import join, pardir, abspath, dirname, isfile
 import re
 from io import BytesIO
 from itertools import chain
@@ -40,12 +40,12 @@ import time
 import dill
 
 plt.style.use('ggplot')
-parent_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-with open(os.path.join(parent_dir, 'resources', 'stopwords.txt')) as stpw:
+parent_dir = dirname(dirname(abspath(__file__)))
+with open(join(parent_dir, 'resources', 'stopwords.txt')) as stpw:
     stopwords = set(stopwords.words('english'))
-    stopwords.add(simple_preprocess(stpw.read().strip().replace('\n', ' '),
-                                    deacc=True))
-    stopwords.add(list(whitespace) + list(punctuation))
+    stopwords.update(simple_preprocess(stpw.read().strip().replace('\n', ' '),
+                                       deacc=True))
+    stopwords.update(list(whitespace) + list(punctuation))
 
 
 def detect_encoding(filename):
@@ -236,7 +236,8 @@ class IdentifyWords(object):
         self.tokenizer = RegexpTokenizer(r'\w+')
         self.vocabulary = None
         self.n = n_keywords
-        self.docs = docs + [' '.join(self.gkp.Keywords.tolist())]
+        self.docs = docs
+        self.landing_doc = landing_doc
         self.max_df = max_df
         self.min_df = min_df
         self.max_features = max_features
@@ -285,7 +286,8 @@ class IdentifyWords(object):
         sent = [simple_preprocess(row) for row in self.clean['clean']]
         min_count = max(1, int(len(sent)*self.min_df))
         sentences = self.make_ngrams(sent, min_count, self.nlp)
-        w2v.build_vocab(sentences, progress_per=10000)
+        w2v.build_vocab(sentences + self.gkp.Keywords.tolist(),
+                        progress_per=10000)
         w2v.train(sentences, total_examples=w2v.corpus_count, epochs=30,
                   report_delay=1)
         w2v.init_sims(replace=True)
@@ -317,9 +319,13 @@ class IdentifyWords(object):
         id2word = Dictionary(sentences)
         corpus = [id2word.doc2bow(text) for text in sentences]
         # Download File: http://mallet.cs.umass.edu/dist/mallet-2.0.8.zip
-        mallet_path = os.path.abspath(os.path.join(__file__, os.path.pardir))
+        mallet_path = abspath(join(dirname(__file__), pardir, 'resources'))
+        mallet_path = join(mallet_path, 'mallet-2.0.8', 'bin', 'mallet')
         ldamallet = wrappers.LdaMallet(mallet_path, corpus=corpus,
                                        num_topics=self.n, id2word=id2word)
+        lda = wrappers.ldamallet.malletmodel2ldamodel(ldamallet,
+                                                      gamma_threshold=0.001,
+                                                      iterations=50)
         self.topics = (ldamallet.show_topics(formatted=False))
         coherence_model_ldamallet = CoherenceModel(model=ldamallet,
                                                    texts=sentences,
@@ -329,6 +335,7 @@ class IdentifyWords(object):
         print('\nCoherence Score: ', self.coherence_ldamallet)
         self.keywords = self.format_topics_sentences(
             ldamodel=ldamallet, corpus=corpus, texts=sentences)
+        return id2word, corpus, lda
 
 
     @staticmethod
@@ -409,7 +416,7 @@ def scrape_paperspace(url='https://blog.paperspace.com/tag/machine-learning/'):
 
 def main(query, stats, num, stop, max_df, min_df, max_features, n_keywords,
          plot_fn, model):
-    if os.path.isfile('pages.dmp'):
+    if isfile('pages.dmp'):
         with open('pages.dmp') as p, open('landing.dmp') as l:
             text = [line for line in p]
             land = ' '.join([line for line in l])

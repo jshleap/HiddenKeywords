@@ -1,4 +1,4 @@
-#HiddenKewords
+# HiddenKewords
 If you have tried to push forward a SEO campaign for google
 in a field that moves quickly, you might find that the Google
 Keyword Planner (GPK) might not give you the most comprehensive

@@ -33,11 +33,15 @@ from gensim.corpora import Dictionary
 import requests.exceptions
 from urllib.parse import urlsplit
 from collections import deque
-from joblib import Parallel, delayed
 from chardet.universaldetector import UniversalDetector
 import dask
 import time
 import dill
+from http.client import HTTPSConnection
+from base64 import b64encode
+from json import loads
+from json import dumps
+
 
 plt.style.use('ggplot')
 parent_dir = dirname(dirname(abspath(__file__)))
@@ -96,6 +100,37 @@ def pre_clean(text):
     text = [x for x in simple_preprocess(text,deacc=True) if x not in
             stopwords]
     return ' '.join(text)
+
+
+class RestClient:
+    domain = "api.dataforseo.com"
+
+    def __init__(self, username, password):
+        self.username = username
+        self.password = password
+
+    def request(self, path, method, data=None):
+        connection = HTTPSConnection(self.domain)
+        try:
+            base64_bytes = b64encode(
+                ("%s:%s" % (self.username, self.password)).encode("ascii")
+                ).decode("ascii")
+            headers = {'Authorization': 'Basic %s' % base64_bytes}
+            connection.request(method, path, headers=headers, body=data)
+            response = connection.getresponse()
+            return loads(response.read().decode())
+        finally:
+            connection.close()
+
+    def get(self, path):
+        return self.request(path, 'GET')
+
+    def post(self, path, data):
+        if isinstance(data, str):
+            data_str = data
+        else:
+            data_str = dumps(data)
+        return self.request(path, 'POST', data_str)
 
 
 class GetPages(object):
@@ -217,7 +252,7 @@ class IdentifyWords(object):
     Use NLP's TF-IDF to identify keywords of a set of documents
     """
     def __init__(self, docs, stats, landing_doc, max_df=0.9, min_df=0.01,
-                 max_features=None, n_keywords=10, model='word2vec'):
+                 max_features=100, n_keywords=10, model='word2vec'):
         """
         Constructor
         :param docs: list of strings with the documents to analyze
@@ -286,7 +321,7 @@ class IdentifyWords(object):
         sent = [simple_preprocess(row) for row in self.clean['clean']]
         min_count = max(1, int(len(sent)*self.min_df))
         sentences = self.make_ngrams(sent, min_count, self.nlp)
-        w2v.build_vocab(sentences + self.gkp.Keywords.tolist(),
+        w2v.build_vocab(sentences + self.gkp.Keyword.tolist(),
                         progress_per=10000)
         w2v.train(sentences, total_examples=w2v.corpus_count, epochs=30,
                   report_delay=1)
@@ -414,8 +449,40 @@ def scrape_paperspace(url='https://blog.paperspace.com/tag/machine-learning/'):
     return documents
 
 
+def get_stats(keywords, dfs_login, dfs_pass):
+    """
+    Get SEO statistics for a list of keywords using Data For SEO API
+
+    :param keywords: List of keywords to query
+    :param dfs_login: Data for SEO login
+    :param dfs_pass: Data for SEO password
+    :return: Dataframe with the info
+    """
+    client = RestClient(dfs_login, dfs_pass)
+    # check if I am within the limit of 2500 words
+    assert len(keywords) <= 2500
+    keywords_list = [
+        dict(
+            language="en",
+            loc_name_canonical="Canada",
+            bid=100,
+            match="exact",
+            keys=keywords
+        )
+    ]
+    response = client.post("/v2/kwrd_ad_traffic_by_keywords",
+                           dict(data=keywords_list))
+    if response["status"] == "error":
+        print("error. Code: %d Message: %s" % (
+            response["error"]["code"], response["error"]["message"]))
+        raise
+    else:
+        results = response["results"][0]
+    return pd.DataFrame(results[0].values(), index=results[0].keys())
+
+
 def main(query, stats, num, stop, max_df, min_df, max_features, n_keywords,
-         plot_fn, model):
+         plot_fn, model, topic_modelling=False):
     if isfile('pages.dmp'):
         with open('pages.dmp') as p, open('landing.dmp') as l:
             text = [line for line in p]
@@ -433,15 +500,22 @@ def main(query, stats, num, stop, max_df, min_df, max_features, n_keywords,
             l.write(land)
     iw = IdentifyWords(text, stats, land, max_df, min_df, max_features,
                        n_keywords, model=model)
-    iw.__getattribute__(model)()
-    with open('iw.pkcl', 'wb') as p:
-        dill.dump(iw, p)
-    if plot_fn is not None:
-        iw.frequency_explorer(plot_fn)
-    print('pre-KeyWords\n', iw.pre_keywords)
-    print('Landing pages KeyWords\n', iw.landing_kw)
-    print('%s Keywords\n' % model, iw.keywords)
-    print("Done")
+    if topic_modelling:
+        iw.__getattribute__(model)()
+        with open('iw.pkcl', 'wb') as p:
+            dill.dump(iw, p)
+        if plot_fn is not None:
+            iw.frequency_explorer(plot_fn)
+        print('pre-KeyWords\n', iw.pre_keywords)
+        print('Landing pages KeyWords\n', iw.landing_kw)
+        print('%s Keywords\n' % model, iw.keywords)
+        print("Done")
+    else:
+        s = set([x[0] for y in iw.pre_keywords if y for x in y for y in
+                iw.pre_keywords if y] + iw.landing_kw)
+        stats = get_stats(list(s), 'jshleap', 'xtmH9EEGFRr5bqgJ')
+        df = pd.DataFrame(stats[0].values(), index=stats[0].keys())
+        return df
 
 
 if __name__ == '__main__':

@@ -898,3 +898,18 @@ www
 url
 yolo
 com
+github
+# Months of the year
+january
+february
+march
+april
+may
+june
+july
+august
+september
+october
+november
+december
+

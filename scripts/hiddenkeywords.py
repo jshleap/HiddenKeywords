@@ -12,6 +12,7 @@ import os
 from bokeh.io import curdoc
 from bokeh.layouts import row, column
 from bokeh.models import ColumnDataSource, CustomJS
+from bokeh.models import ColumnDataSource, CustomJS
 from bokeh.models.widgets import Slider, TextInput, PreText, Select, \
     Button, DataTable, TableColumn, NumberFormatter
 from bokeh.plotting import figure
@@ -49,6 +50,10 @@ ks = Knapsack(items_names=df.index.to_list(), values=values.to_list(),
               solve_type=5, name='Branch_n_bound')
 ks.get_results()
 selected = df[df.index.isin(ks.packed_items)]
+
+
+
+
 #path = join(abspath(join(dirname(__file__), pardir)), 'resources')
 df_opt = dict(skiprows=[0, 1], encoding=detect_encoding(mock_GKP_result), sep='\t')
 gkp = pd.read_csv(stats, **df_opt)

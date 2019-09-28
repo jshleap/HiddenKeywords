@@ -39,7 +39,7 @@ class Knapsack(object):
         self.items_names = items_names
         self.values = values
         self.weights = weights
-        self.capacity = [capacity * self.weight_factor]
+        self.capacity = capacity
         self.name = name
         self.solver_type = solve_type
         self.knapsack_solver = knapsack.KnapsackSolver
@@ -86,6 +86,13 @@ class Knapsack(object):
         """
         self.__solver = self.knapsack_solver(self.solver_type, name)
 
+    @property
+    def capacity(self):
+        return self.__capacity
+
+    @capacity.setter
+    def capacity(self, capacity):
+        self.__capacity = [capacity * self.weight_factor]
     def solve(self):
         self.solver.Init(self.values, self.weights, self.capacity)
         self.result = self.solver.Solve() / self.value_factor

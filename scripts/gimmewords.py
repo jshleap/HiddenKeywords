@@ -41,7 +41,7 @@ from http.client import HTTPSConnection
 from base64 import b64encode
 from json import loads
 from json import dumps
-
+from HiddenKeywords.scripts.dataforseo import *
 
 plt.style.use('ggplot')
 parent_dir = dirname(dirname(abspath(__file__)))
@@ -283,6 +283,7 @@ class IdentifyWords(object):
         self.nlp = spacy.load('en', disable=['ner', 'parser'])
         self.text_counts = docs
         self.model = model
+        self.topics = None
 
     @property
     def text_counts(self):
@@ -513,7 +514,7 @@ def main(query, stats, num, stop, max_df, min_df, max_features, n_keywords,
     else:
         s = set([x[0] for y in iw.pre_keywords if y for x in y for y in
                 iw.pre_keywords if y] + iw.landing_kw)
-        stats = get_stats(list(s), 'jshleap', 'xtmH9EEGFRr5bqgJ')
+        stats = get_stats(list(s), dfs_login, dfs_pass )
         df = pd.DataFrame(stats[0].values(), index=stats[0].keys())
         return df
 

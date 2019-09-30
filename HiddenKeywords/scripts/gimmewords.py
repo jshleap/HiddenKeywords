@@ -41,7 +41,11 @@ from http.client import HTTPSConnection
 from base64 import b64encode
 from json import loads
 from json import dumps
-from HiddenKeywords.scripts.dataforseo import *
+import numpy as np
+from HiddenKeywords.scripts.__dataforseo_credentials__ import *
+
+unicode_ideograms = r'[\u3040-\u30ff\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff' \
+                    r'\uff66-\uff9f]+'
 
 plt.style.use('ggplot')
 parent_dir = dirname(dirname(abspath(__file__)))
@@ -134,12 +138,14 @@ class RestClient:
 
 
 class GetPages(object):
-    def __init__(self, query, num=20, stop=5, depth=3):
+    def __init__(self, query, max_results=20, stop=5, depth=3):
         self.query = query
-        self.num = num
-        self.stop = stop
+        self.max_results = max_results
+        self.stop = max_results
         self.depth = depth
-        self.gsearch = search(self.query, tld="co.in", num=self.num,
+        self.has_ideograms = lambda x: True if re.findall(unicode_ideograms, x
+                                                          ) else False
+        self.gsearch = search(self.query, tld="co.in", num=self.max_results,
                               stop=self.stop, pause=2)
         self.landing_page = next(self.gsearch)
         self.pages = []
@@ -151,6 +157,9 @@ class GetPages(object):
 
     @landing_page.setter
     def landing_page(self, url):
+        line = 'Crawling the landing page'
+        print(line)
+        print('='*len(line))
         results = [dask.delayed(self.read_url)(u) for u in self.crawl(url)]
         out = dask.compute(*results)
         self.__landing_page = ' '.join(out)
@@ -161,24 +170,33 @@ class GetPages(object):
 
     @text.setter
     def text(self, _):
-        results = [dask.delayed(self.search_google)(url) for url in self.gsearch]
+        line = 'Crawling Google results'
+        print(line)
+        print('=' * len(line))
+        results = [dask.delayed(self.search_google)(url) for url in
+                   self.gsearch]
         out = dask.compute(*results)
         self.__text, self.pages = zip(*out)
 
-    @staticmethod
-    def crawl(url, depth=10):
+    def crawl(self, url):
         new_urls = deque([url])
         processed_urls = set()
         local_urls = set()
         foreign_urls = set()
         broken_urls = set()
         count = 0
-        while len(new_urls) != 0 and count <= depth:
+        while len(new_urls) != 0 and count <= self.depth:
             count += 1
             url = new_urls.popleft()
             processed_urls.add(url)
-            print("Processing %s" % url)
-
+            unwanted = ['rss/', 'javascript', 'comment', '@', 'sign_in',
+                        'sign_up', 'www.youtube.', 'help', '/author',
+                        '/search/', '/feed/', '?']
+            # avoid subscription, help, or ideogram urls
+            if any([i.lower() in url.lower() for i in unwanted]) or \
+                    self.has_ideograms(url):
+                continue
+            print("\tProcessing %s" % url)
             try:
                 response = requests.get(url)
             except(
@@ -217,7 +235,7 @@ class GetPages(object):
         :param url: url to process
         :return: list of blogs' text
         """
-        urls = self.crawl(url, depth=self.depth)
+        urls = self.crawl(url)
         docs = ' '.join([self.read_url(u) for u in urls])
         return docs, url
 
@@ -233,8 +251,8 @@ class GetPages(object):
             soup = BeautifulSoup(html_doc.decode('ascii', errors='ignore'),
                                  'html.parser')
             try:
-                return ' '.join([pre_clean(x.get_text()) for x in soup.find_all(
-                    'main')])
+                text = [pre_clean(x.get_text()) for x in soup.find_all('main')]
+                return ' '.join(text)
             except AttributeError:
                 print(req.status_code)
                 print(html_doc)
@@ -459,9 +477,14 @@ def get_stats(keywords, dfs_login, dfs_pass):
     :param dfs_pass: Data for SEO password
     :return: Dataframe with the info
     """
+    print('Fetching SEO stats for keywords')
     client = RestClient(dfs_login, dfs_pass)
     # check if I am within the limit of 2500 words
-    assert len(keywords) <= 2500
+    try:
+        assert len(keywords) <= 2500
+    except AssertionError:
+        print(len(keywords))
+        raise
     keywords_list = [
         dict(
             language="en",
@@ -479,18 +502,22 @@ def get_stats(keywords, dfs_login, dfs_pass):
         raise
     else:
         results = response["results"][0]
-    return pd.DataFrame(results[0].values(), index=results[0].keys())
+    try:
+        df = pd.DataFrame(results[0].values(), index=results[0].keys())
+    except KeyError:
+        df = pd.DataFrame(results.values(), index=results.keys())
+    return df
 
 
-def main(query, stats, num, stop, max_df, min_df, max_features, n_keywords,
-         plot_fn, model, topic_modelling=False):
+def main(query, stats, max_results, depth, max_df, min_df, max_features, n_keywords,
+         plot_fn, model):
     if isfile('pages.dmp'):
         with open('pages.dmp') as p, open('landing.dmp') as l:
             text = [line for line in p]
             land = ' '.join([line for line in l])
     else:
         now = time.time()
-        pages = GetPages(query, num, stop)
+        pages = GetPages(query, max_results, depth)
         elapsed = (time.time() - now) / 60
         print("Crawling done in", elapsed, 'minutes')
         to_str = lambda x: x if isinstance(x, str) else '\n'.join(x)
@@ -501,7 +528,7 @@ def main(query, stats, num, stop, max_df, min_df, max_features, n_keywords,
             l.write(land)
     iw = IdentifyWords(text, stats, land, max_df, min_df, max_features,
                        n_keywords, model=model)
-    if topic_modelling:
+    if model is not None:
         iw.__getattribute__(model)()
         with open('iw.pkcl', 'wb') as p:
             dill.dump(iw, p)
@@ -512,10 +539,27 @@ def main(query, stats, num, stop, max_df, min_df, max_features, n_keywords,
         print('%s Keywords\n' % model, iw.keywords)
         print("Done")
     else:
-        s = set([x[0] for y in iw.pre_keywords if y for x in y for y in
-                iw.pre_keywords if y] + iw.landing_kw)
-        stats = get_stats(list(s), dfs_login, dfs_pass )
-        df = pd.DataFrame(stats[0].values(), index=stats[0].keys())
+        landing_keywords, landing_pageRank = zip(*iw.landing_kw)
+        q = np.quantile(landing_pageRank, 0.25)
+        idx = [x > q for x in landing_pageRank]
+        landing_keywords = np.array(landing_keywords)[idx].tolist()
+        gkp_keywords = iw.gkp.Keyword.to_list()
+        inferred_keywords = [x[0] for y in iw.pre_keywords if y for x in
+                             y for y in iw.pre_keywords if x]
+        inferred_pagerank = [x[1] for y in iw.pre_keywords if y for x in
+                             y for y in iw.pre_keywords if x]
+        new_q = np.quantile(inferred_pagerank, 0.25)
+        inferred_idx = [x > new_q for x in inferred_pagerank]
+        inferred_keywords = np.array(inferred_keywords)[inferred_idx].tolist()
+        combined = list(set(landing_keywords + gkp_keywords + inferred_keywords
+                            ))
+        combined = [x.replace('_', ' ') for y in combined for x in y.split()
+                    if x.replace('_', ' ') not in stopwords][:2500]
+        df = get_stats(combined, dfs_login, dfs_pass)
+        df = df.reset_index().rename(columns={'index': 'Keyword'})
+        df.loc[df.Keyword.isin(iw.gkp.Keyword), 'source'] = 'GKP'
+        df.loc[~df.Keyword.isin(iw.gkp.Keyword), 'source'] = 'scraped'
+        df.to_csv('df_checkpoint.csv', index=False)
         return df
 
 
@@ -526,8 +570,8 @@ if __name__ == '__main__':
     parser.add_argument('stats', help='Google Keyword Planner filename')
     parser.add_argument('-x', '--max_results', type=int, default=20,
                         help='Maximum number of results from google query')
-    parser.add_argument('-s', '--stop', type=int, default=10,
-                        help='Number or records to show')
+    parser.add_argument('-d', '--depth', type=int, default=5,
+                        help='Max depth to crawl each result')
     parser.add_argument('-m', '--max_df', type=float, default=0.9,
                         help='When building the vocabulary ignore terms that '
                              'have a document frequency strictly higher than '
@@ -543,12 +587,12 @@ if __name__ == '__main__':
                         help='Maximum number of keywords to retrieve')
     parser.add_argument('-p', '--plot_fn', type=str, default=None,
                         help='Name of the plot file')
-    parser.add_argument('-M', '--model', default='word2vec',
+    parser.add_argument('-M', '--model', default=None,
                         help='NLP model to fit. Available tf_idf, word2vec '
                              'and lda')
     args = parser.parse_args()
-    main(query=args.query, stats=args.stats, num=args.max_results,
-         stop=args.stop, max_df=args.max_df, plot_fn=args.plot_fn,
+    main(query=args.query, stats=args.stats, max_results=args.max_results,
+         depth=args.depth, max_df=args.max_df, plot_fn=args.plot_fn,
          model=args.model, max_features=args.max_features, min_df=args.min_df,
          n_keywords=args.n_keywords)
 

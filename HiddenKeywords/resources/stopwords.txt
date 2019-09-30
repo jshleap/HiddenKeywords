@@ -390,6 +390,7 @@ hereafters
 hereafter
 hereupon
 hence
+help
 hadst
 had
 having
@@ -577,6 +578,7 @@ lotted
 lot
 lest
 less
+ive
 ie
 ifs
 if
@@ -898,6 +900,10 @@ www
 url
 yolo
 com
+https
+http
+ccsd
+org
 github
 # Months of the year
 january

@@ -1,2 +1,0 @@
-dfs_login = 'YOUR DATA FOR SEO LOGIN'
-dfs_pass = 'YOUR DATA FOR SEO PASSWORD'

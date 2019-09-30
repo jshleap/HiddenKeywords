@@ -5,21 +5,17 @@ Given a landing page, and the Google Keyword planner for your campaign,
 create a dashboard that allows you to explore basket of words based on daily
 budget
 """
-from scripts.gimmewords import *
-from scripts.knapsack import *
-import numpy as np
+from HiddenKeywords.HiddenKeywords.scripts.gimmewords import *
+from HiddenKeywords.HiddenKeywords.scripts.knapsack import *
 import os
 from bokeh.io import curdoc
 from bokeh.layouts import row, column
 from bokeh.models import ColumnDataSource, CustomJS
-from bokeh.models import ColumnDataSource, CustomJS
-from bokeh.models.widgets import Slider, TextInput, PreText, Select, \
-    Button, DataTable, TableColumn, NumberFormatter
-from bokeh.plotting import figure
+from bokeh.models.widgets import Slider, Button, DataTable, TableColumn, NumberFormatter
 import sys
 landing_page, stats, budget = sys.argv[1:4]
 num, stop = 100, 10
-# def main(landing_page, stats, budget, num=100, stop=10):
+# def main(landing_page, stats, budget, max_results=100, stop=10):
 if isfile('pages.dmp'):
     with open('pages.dmp') as p, open('landing.dmp') as l:
         text = [line for line in p]

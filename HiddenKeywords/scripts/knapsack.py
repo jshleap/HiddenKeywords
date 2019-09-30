@@ -98,7 +98,6 @@ class Knapsack(object):
         self.packed_weights = []
         self.total_weight = 0
 
-
     def solve(self):
         self.solver.Init(self.values, self.weights, [self.capacity])
         self.result = self.solver.Solve() / self.value_factor

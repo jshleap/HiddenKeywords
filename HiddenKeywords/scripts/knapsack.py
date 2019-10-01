@@ -2,11 +2,11 @@
 The Knapsack Problem solver from
 https://developers.google.com/optimization/bin/knapsack
 """
-import sys
 import argparse
+import sys
+
+import numpy as np
 from ortools.algorithms import pywrapknapsack_solver as knapsack
-from itertools import product
-import  numpy as np
 
 
 class Knapsack(object):
@@ -16,6 +16,14 @@ class Knapsack(object):
     container with a fixed capacity, so as to maximize the total value of the
     packed items
     """
+    value_factor = 1
+    weight_factor = 1
+    knapsack_solver = knapsack.KnapsackSolver
+    result = None
+    packed_items = []
+    packed_weights = []
+    total_weight = 0
+
     def __init__(self, items_names, values, weights, capacity, solve_type=5,
                  name='KnapsackExample'):
         """
@@ -34,20 +42,13 @@ class Knapsack(object):
         3: KNAPSACK_MULTIDIMENSION_CBC_MIP_SOLVER
         5: KNAPSACK_MULTIDIMENSION_BRANCH_AND_BOUND_SOLVER
         """
-        self.value_factor = 1
-        self.weight_factor = 1
         self.items_names = items_names
         self.values = values
         self.weights = weights
         self.name = name
         self.solver_type = solve_type
-        self.knapsack_solver = knapsack.KnapsackSolver
         self.solver = name
         self.capacity = capacity
-        self.result = None
-        self.packed_items = []
-        self.packed_weights = []
-        self.total_weight = 0
 
     @property
     def values(self):
@@ -93,21 +94,37 @@ class Knapsack(object):
 
     @property
     def solver(self):
+        """
+        Getter for the solver instance
+        :return: set solver instance
+        """
         return self.__solver
 
     @solver.setter
     def solver(self, name):
         """
-        Execute the solver
+        Instantiate the solver based on the solver_type attribute and a name
+        :param name: Name of solver instance
         """
         self.__solver = self.knapsack_solver(self.solver_type, name)
 
     @property
     def capacity(self):
+        """
+        Getter for the capacity attribute
+        :return: set capacity
+        """
         return self.__capacity
 
     @capacity.setter
     def capacity(self, capacity):
+        """
+        Getter for the capacity attribute. It will match the capacity units to
+        the weight units using the weight_factor attribute. It will also reset
+        the result packed_items, packed_weights, and total_weight attributes
+        :param capacity:
+        :return:
+        """
         self.__capacity = capacity * self.weight_factor
         self.result = None
         self.packed_items = []
@@ -143,7 +160,6 @@ def test():
     """
     Dummy test, to include or-tools example. Eventually will be converted to
     unittest
-    :return:
     """
     items_names = ['architecture training', 'enable', 'operations', 'define',
                    'cells', 'host', 'market', 'cases', 'custom', 'end',

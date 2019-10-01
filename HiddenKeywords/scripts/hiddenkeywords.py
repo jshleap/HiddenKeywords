@@ -5,8 +5,8 @@ Given a landing page, and the Google Keyword planner for your campaign,
 create a dashboard that allows you to explore basket of words based on daily
 budget
 """
-from HiddenKeywords.HiddenKeywords.scripts.gimmewords import *
-from HiddenKeywords.HiddenKeywords.scripts.knapsack import *
+from HiddenKeywords.scripts.gimmewords import *
+from HiddenKeywords.scripts.knapsack import *
 import os
 from bokeh.io import curdoc
 from bokeh.layouts import row, column

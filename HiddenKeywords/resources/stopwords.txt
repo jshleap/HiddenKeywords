@@ -92,6 +92,7 @@ nothing
 nathless
 natheless
 t
+tends
 thank
 ten
 tills
@@ -364,6 +365,7 @@ main
 make
 mayest
 many
+man
 mauger
 maugre
 me
@@ -390,6 +392,7 @@ hereafters
 hereafter
 hereupon
 hence
+hello
 help
 hadst
 had
@@ -589,6 +592,7 @@ itself
 its
 it
 is
+isnt
 idem
 idemer
 idemest
@@ -678,6 +682,9 @@ did
 differentest
 differenter
 different
+deux
+deus
+dios
 describing
 describe
 describes
@@ -905,6 +912,8 @@ http
 ccsd
 org
 github
+ele
+lex
 # Months of the year
 january
 february

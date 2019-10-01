@@ -51,10 +51,18 @@ class Knapsack(object):
 
     @property
     def values(self):
+        """
+        Values attribute getter
+        :return: set values attribute
+        """
         return self.__values
 
     @values.setter
     def values(self, values):
+        """
+        Values attribute setter transforming the values to integers by
+        factorizing them
+        """
         for x in values:
             if isinstance(x, float):
                 self.value_factor = 1000
@@ -64,10 +72,18 @@ class Knapsack(object):
 
     @property
     def weights(self):
+        """
+        Weights attribute getter
+        :return: set attribute
+        """
         return self.__weights
 
     @weights.setter
     def weights(self, weights):
+        """
+        Weights attribute setter transforming the values to integers by
+        factorizing them
+        """
         for x in weights:
             if isinstance(x, float):
                 self.weight_factor = 1000
@@ -104,8 +120,9 @@ class Knapsack(object):
 
     def get_results(self, print_it=False):
         """
-        Populate human readable results
-        :return:
+        Executing the solver, and populate human readable results and print
+        them if required
+        :param print_it: whether to print the results to terminal
         """
         self.solve()
         for i, name in enumerate(self.items_names):
@@ -162,12 +179,22 @@ def test():
 def main(items_names=None, values=None, weights=None, capacity=None,
          name='KnapsackExample', solver_type=5):
     """
-    Execute the script
-    :param values:
-    :param weights:
-    :param capacity:
-    :param name:
-    :param solver_type:
+    Execute the script. items_names, values, weights, and capacity are None,
+    it will run a dummy test
+
+    :param items_names: Name of the items to optimized
+    :param values: Iterable with the items value
+    :param weights: Iterable with the items weight
+    :param capacity: Integer with the max capacity (for storing weights)
+    :param name: Name of the solver instance
+    :param solver_type: Type of solver
+
+    solvertypes:
+        0: KNAPSACK_BRUTE_FORCE_SOLVER
+        1: KNAPSACK_64ITEMS_SOLVER
+        2: KNAPSACK_DYNAMIC_PROGRAMMING_SOLVER
+        3: KNAPSACK_MULTIDIMENSION_CBC_MIP_SOLVER
+        5: KNAPSACK_MULTIDIMENSION_BRANCH_AND_BOUND_SOLVER
     """
     if values is None:
         # just test

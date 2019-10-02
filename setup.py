@@ -4,7 +4,7 @@ with open("README.md", "r") as fh:
     long_description = fh.read()
 
 setuptools.setup(
-    name="HiddenKeywords",
+    name="ADvantage",
     version="0.0.1",
     author="Jose Sergio Hleap",
     author_email="jshleap@gmail.com",

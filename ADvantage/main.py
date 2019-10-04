@@ -1,5 +1,5 @@
 from os.path import dirname
-from os.path import join
+from os.path import join, abspath
 import numpy as np
 import pandas as pd
 from bokeh.io import curdoc
@@ -31,9 +31,11 @@ cols = ['Keyword', 'ad_position_average', 'cpc_average',
         'daily_clicks_average', 'daily_cost_average',
         'daily_impressions_average', 'source']
 metric = cols[1:-1]
+
+# Path to files
+path = abspath(join(dirname(__file__), 'tmp'))
 # read output of scraping
-full = pd.read_csv(join(dirname(__file__), 'df_checkpoint.csv'),
-                 usecols=cols)
+full = pd.read_csv(join(dirname(__file__), 'df_checkpoint.csv'), usecols=cols)
 df = full.dropna()
 nan_idx = df.index
 nan_df = full[~full.index.isin(nan_idx)]
@@ -137,15 +139,13 @@ data_table = DataTable(source=source, columns=columns, width=450, height=200)
 data_table_nans = DataTable(source=source_missing, columns=columns,
                             width=450, height=200)
 
-
-#layout = grid([[data_table, p], [button]])
 layout = row(column(div, data_table, button, sizing_mode="scale_width"),
              column(p, sizing_mode="scale_width"))
 curdoc().add_root(slider)
 curdoc().add_root(layout)
-#curdoc().add_root(row(data_table, data_table_nans))
-#curdoc().add_root(button)
-curdoc().add_root(row(column(div_missing, data_table_nans, sizing_mode="scale_width"), sizing_mode="scale_width"))
+curdoc().add_root(row(column(div_missing, data_table_nans,
+                             sizing_mode="scale_width"),
+                      sizing_mode="scale_width"))
 curdoc().title = "Export CSV"
 
 update()

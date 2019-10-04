@@ -20,11 +20,12 @@ statistics) even if no better words are found through web scraping.
 In this README you will find:
 1. [Think of the cost](#think-of-the-cost): Brief explanation of the 
 business value of ADvantage
+2. [Setup](#setup): how to setup the local version of ADvantage and some
+comments on the online version.
 2. [How does it work?](#how-does-it-work): A more detailed explanation of
 the methods used by ADvantage
 3. [Credentials for third party API](#credentials-for-third-party-api):
 previous to setting up the app, make sure you have these credentials
-
 
 ## Think of the cost
 Google ads work by bidding on keywords. This means that in order to have
@@ -39,16 +40,37 @@ to spend. Once the desired basket of words of your choice have been
 identified, you can download the associated table for you to proceed 
 with the campaign.
 
+## Setup
+Lorem ipsum...
 ## How does it work?
 ADvantage works in three modules:
 1. [Get similar content](#get-similar-content)
-2. [Scrape and crawl](#scape-and-crawl)
+2. [Extract keywords](#extract-keywords)
 3. [Combinatorial optimization](#combinatorial-optimization)
 
 ###  Get similar content
 <img src="img/get_corpora.png" >
-### Scrape and crawl
+
+Based on your landing page, ADvantage will use the GOOGLE API to search 
+for the top 100 similar web pages. ADvantage will then proceed to scrape
+the text and crawl the local links. The crawling process is repeated up
+to depth 5 to  avoid spurious connections. Links pointing to javascript
+apps, mailtos, and web names with ideograms are ignored. The scraped 
+text is assembled into a corpus for further analysis
+
+### Extract keywords
+With the corpus assembled, ADvantage proceeds to remove stopwords 
+(including an extension to the one provided in most packages), 
+punctuation and non text characters. A Natural Language Processing (NLP)
+text summarization using TextRank is used to identify the keywords. 
+
 ### Combinatorial optimization
+The two steps above will give you a large set of keywords. Even if only 
+using the Google keyword planner, the number of words might be in the 
+hundreds. The question is then how can we get a basket of words that
+maximizes impressions and clicks, while minimizing the daily cost. 
+ADvantage uses a branch and bound solution to this combinatorial 
+optimization problem. In brief, branch and bound work by ...
 
 ## Credentials for third party API
 To get the apropriate statistics of the keywords, ADworks required the 

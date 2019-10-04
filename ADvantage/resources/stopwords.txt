@@ -914,6 +914,9 @@ org
 github
 ele
 lex
+ls
+rm
+eq
 # Months of the year
 january
 february

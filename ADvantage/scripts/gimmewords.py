@@ -6,6 +6,7 @@ __author__ = 'Jose Sergio Hleap'
 __version__ = '0.1b'
 __email__ = 'jshleap@gmail.com'
 
+from types import GeneratorType
 import argparse
 import json
 import multiprocessing
@@ -35,7 +36,7 @@ from chardet.universaldetector import UniversalDetector
 from gensim.corpora import Dictionary
 from gensim.models import Word2Vec, wrappers, CoherenceModel
 from gensim.models.phrases import Phrases, Phraser
-from gensim.summarization import keywords
+from gensim.summarization import keywords, textcleaner
 from gensim.utils import simple_preprocess
 from googlesearch import search
 from nltk.corpus import stopwords
@@ -102,9 +103,9 @@ def pre_clean(text):
     text = re.sub("_.+\s", "", text)
     text = re.sub('\S*@\S*\s?', '', text)
     text = re.sub('\s+', ' ', text)
-    # text to list removiing stopwords
+    # text to list removing stopwords
     text = [x for x in simple_preprocess(text, deacc=True) if x not in
-            stopwords]
+            stopwords and len(x) != 1]
     return ' '.join(text)
 
 
@@ -214,7 +215,6 @@ class GetPages(object):
     """
     Class to crawl and scrape webpages based on query.
     """
-
     def __init__(self, query, max_results=20, depth=3):
         """
         Constructor of GetPages class.
@@ -246,6 +246,7 @@ class GetPages(object):
         Setter for landing page
         :param query: Requested query
         """
+        # TODO: make it more generizable
         if 'www' in query:
             # query is the landing page
             url = next(self.gsearch)
@@ -384,7 +385,8 @@ class GetPages(object):
             soup = BeautifulSoup(html_doc.decode('ascii', errors='ignore'),
                                  'html.parser')
             try:
-                text = [pre_clean(x.get_text()) for x in soup.find_all('main')]
+                text = [simple_preprocess(x.get_text(), deacc=True)
+                        for x in soup.find_all('main')]
                 return ' '.join(text)
             except AttributeError:
                 print(req.status_code)
@@ -411,6 +413,8 @@ class IdentifyWords(object):
     keywords = None
     vocabulary = None
     topics = None
+    landing_kw = None
+    opt = dict(deacc=True, scores=True)
 
     def __init__(self, docs, stats, landing_doc, max_df=0.9, min_df=0.01,
                  max_features=100, n_keywords=10, model='word2vec'):
@@ -424,7 +428,6 @@ class IdentifyWords(object):
         :param max_features: build a vocabulary that only consider the top
         max_features ordered by term frequency
         """
-        opt = dict(deacc=True, scores=True)
         df_opt = dict(skiprows=[0, 1], encoding=detect_encoding(stats),
                       sep='\t')
         self.gkp = pd.read_csv(stats, **df_opt)
@@ -434,10 +437,59 @@ class IdentifyWords(object):
         self.max_df = max_df
         self.min_df = min_df
         self.max_features = max_features
-        self.pre_keywords = [keywords(x, **opt) for x in self.docs]
-        self.landing_kw = keywords(landing_doc, **opt)
+        self.pre_keywords = docs
         self.text_counts = docs
         self.model = model
+
+    @property
+    def docs(self):
+        """
+        Getter for the docs attribute
+        :return: a set instance of docs
+        """
+        return self.__docs
+
+    @docs.setter
+    def docs(self, docs):
+        self.__docs = [x.strip() for x in docs if x.strip()]
+
+    @property
+    def pre_keywords(self):
+        """
+        Getter of pre_keywords attribute
+        :return: set value of pre_keywords
+        """
+        return self.__pre_keywords
+
+    @pre_keywords.setter
+    def pre_keywords(self, _):
+        """
+        Setter of pre_keywords
+        :param docs: list of strings with the documents to analyze
+        """
+        cleaned = [list(textcleaner.tokenize_by_word(x)) for x in
+                   self.clean_it(return_it=True)]
+        min_count = max(1, int(len(cleaned) * self.min_df))
+        ngrams = self.make_ngrams(cleaned, min_count, self.nlp)
+        # ngrams = [self.make_ngrams(tokens, min_count, self.nlp) for tokens in
+        #           cleaned if tokens]
+        self.__pre_keywords = [keywords(x, **self.opt) for x in ngrams]
+
+    @property
+    def landing_doc(self):
+        """
+        Getter for landing doc
+        :return: set landing document
+        """
+        return self.__landing_doc
+    @landing_doc.setter
+    def landing_doc(self, landing_doc):
+        """
+        Setter of landing_doc and laning_kw attributes
+        :param landing_doc: text of landing page
+        """
+        self.__landing_doc = landing_doc
+        self.landing_kw = keywords(self.landing_doc, **self.opt)
 
     @property
     def text_counts(self):
@@ -461,13 +513,17 @@ class IdentifyWords(object):
         print('Top 10 words in vocabulary')
         print(list(vectorize.vocabulary_.keys())[:10])
 
-    def clean_it(self):
+    def clean_it(self, return_it=False):
         """
         Process and clean documents populating the clean attribute with a
-        dataframe of document per row
+        dataframe of document per row or return a list of cleaned strings
+
+        :param return_it: whether to return the list or create a dataframe
         """
         txt = [self.cleaning(doc) for doc in self.nlp.pipe(
             (pre_clean(x) for x in self.docs), batch_size=5000, n_threads=-1)]
+        if return_it:
+            return txt
         self.clean = pd.DataFrame({'clean': txt}).dropna().drop_duplicates()
 
     def word2vec(self):
@@ -527,6 +583,12 @@ class IdentifyWords(object):
         :param doc: tokenized document
         :return: string with clean lemmas
         """
+        if isinstance(doc, str):
+            doc = doc.strip().split()
+        elif isinstance(doc, spacy.tokens.doc.Doc):
+            pass
+        else:
+            raise NotImplementedError
         return ' '.join([token.lemma_ for token in doc if not token.is_stop])
 
     @staticmethod
@@ -538,14 +600,31 @@ class IdentifyWords(object):
         :param nlp: instance of spacy nlp
         :return: sentences
         """
-        bigram = Phrases(sent, min_count=min_count, threshold=100)
-        trigram = Phrases(bigram[sent], threshold=100)
+        if isinstance(sent, GeneratorType):
+            sent = list(sent)
+        bigram = Phrases(sent, min_count=min_count, threshold=1)
+        trigram = Phrases(bigram[sent], min_count=min_count, threshold=1)
         bigram_mod = Phraser(bigram)
         trigram_mod = Phraser(trigram)
-        ngrams = [bigram_mod[doc] for doc in sent] + [
-            trigram_mod[bigram_mod[doc]] for doc in sent]
-        return [[token.lemma_ for token in nlp(" ".join(gram)) if token.pos_ in
-                 ['NOUN', 'ADJ', 'VERB', 'ADV']] for gram in ngrams]
+        ngrams = [list(set(bigram_mod[x] + trigram_mod[x])) for x in sent]
+        #ngrams = [x for y in ngrams for x in y if x not in stopwords]
+        try:
+            if isinstance(ngrams[0], str):
+                out = [token.lemma_ for token in nlp(" ".join(ngrams))
+                       if token.pos_ in ['NOUN', 'ADJ', 'VERB', 'ADV']
+                       and not token.is_stop]
+            else:
+                out = [[token.lemma_ for token in nlp(" ".join(gram)) if
+                        token.pos_
+                        in ['NOUN', 'ADJ', 'VERB',
+                            'ADV'] and not token.is_stop]
+                       for gram in ngrams]
+        except IndexError:
+            out = [token.lemma_ for token in nlp(" ".join(ngrams))
+                   if token.pos_ in ['NOUN', 'ADJ', 'VERB', 'ADV']
+                   and not token.is_stop]
+
+        return out
 
     @staticmethod
     def format_topics_sentences(ldamodel, corpus, texts):
@@ -595,7 +674,7 @@ class IdentifyWords(object):
 
     def tf_idf(self):
         """
-        Process the textsusing NLP's tf_idf
+        Process the texts using NLP's tf_idf
         """
         self.tfidf_transformer = TfidfTransformer(smooth_idf=True,
                                                   use_idf=True)
@@ -607,7 +686,7 @@ class IdentifyWords(object):
 
 
 def main(query, stats, max_results, depth, max_df, min_df, max_features,
-         n_keywords, plot_fn, model):
+         n_keywords, plot_fn, model, email=None):
     """
     Main execution of the code
 
@@ -623,12 +702,16 @@ def main(query, stats, max_results, depth, max_df, min_df, max_features,
     :param n_keywords: Number of keywords
     :param plot_fn: Plot filename or None
     :param model: Model to use. Available: tf_idf, lda, word2vec
+    :param email: email to send the results to
     :return: dataframe with keywords and their stats
     """
-    if isfile('pages.dmp'):
-        with open('pages.dmp') as p, open('landing.dmp') as l:
+    path = dirname(stats)
+    page_file = join(path, 'pages.dmp')
+    land_file = join(path, 'landing.dmp')
+    if isfile(page_file):
+        with open(page_file) as p, open(land_file) as lf:
             text = [line for line in p]
-            land = ' '.join([line for line in l])
+            land = ' '.join([line for line in lf])
     else:
         now = time.time()
         pages = GetPages(query, max_results, depth)
@@ -637,9 +720,9 @@ def main(query, stats, max_results, depth, max_df, min_df, max_features,
         to_str = lambda x: x if isinstance(x, str) else '\n'.join(x)
         text = pages.text
         land = to_str(pages.landing_page)
-        with open('pages.dmp', 'w') as p, open('landing.dmp', 'w') as l:
+        with open(page_file, 'w') as p, open(page_file, 'w') as lf:
             p.write(to_str(text))
-            l.write(land)
+            lf.write(land)
     iw = IdentifyWords(text, stats, land, max_df, min_df, max_features,
                        n_keywords, model=model)
     if model is not None:
@@ -653,28 +736,36 @@ def main(query, stats, max_results, depth, max_df, min_df, max_features,
         print('%s Keywords\n' % model, iw.keywords)
         print("Done")
     else:
-        landing_keywords, landing_pageRank = zip(*iw.landing_kw)
-        q = np.quantile(landing_pageRank, 0.25)
+        landing_keywords, landing_page_rank = zip(*iw.landing_kw)
+        q = np.quantile(landing_page_rank, 0.25)
         # remove poorly connected keywords (likely unimportant)
-        idx = [x > q for x in landing_pageRank]
+        idx = [x > q for x in landing_page_rank]
         landing_keywords = np.array(landing_keywords)[idx].tolist()
         gkp_keywords = iw.gkp.Keyword.to_list()
-        inferred_keywords = [x[0] for y in iw.pre_keywords if y for x in
-                             y for y in iw.pre_keywords if x]
-        inferred_pagerank = [x[1] for y in iw.pre_keywords if y for x in
-                             y for y in iw.pre_keywords if x]
+        inferred_keywords = [x[0] for y in iw.pre_keywords if y for x in y]
+        inferred_pagerank = [x[1] for y in iw.pre_keywords if y for x in y]
         new_q = np.quantile(inferred_pagerank, 0.25)
         inferred_idx = [x > new_q for x in inferred_pagerank]
         inferred_keywords = np.array(inferred_keywords)[inferred_idx].tolist()
         combined = list(set(landing_keywords + inferred_keywords))
         combined = [x.replace('_', ' ') for y in combined for x in y.split()
                     if x.replace('_', ' ') not in stopwords][:2500]
-        df_others = get_stats(combined, dfs_login, dfs_pass, 'scraped')
-        gkp_kw = [x.replace('_', ' ') for y in gkp_keywords for x in y.split()
-                  if x.replace('_', ' ') not in stopwords][:2500]
-        df_gkp = get_stats(gkp_kw, dfs_login, dfs_pass, 'GKP')
-        df = pd.concat([df_others, df_gkp], ignore_index=True)
-        df.to_csv('df_checkpoint.csv', index=False)
+        if email is not None:
+            user = email.split('@')
+            fn = join(path, '%s_stats.csv' % user)
+        else:
+            fn = join(path, 'df_checkpoint.csv')
+        if not isfile(fn):
+            df_others = get_stats(combined, dfs_login, dfs_pass, 'scraped')
+            gkp_kw = [x.replace('_', ' ') for y in gkp_keywords
+                      for x in y.split() if x.replace('_', ' ') not in
+                      stopwords][:2500]
+            df_gkp = get_stats(gkp_kw, dfs_login, dfs_pass, 'GKP')
+            df = pd.concat([df_others, df_gkp], ignore_index=True)
+            df.to_csv(fn, index=False)
+        if email is not None:
+            # set bokeh server and send email
+            raise NotImplementedError
         return df
 
 
@@ -709,4 +800,4 @@ if __name__ == '__main__':
     main(query=args.query, stats=args.stats, max_results=args.max_results,
          depth=args.depth, max_df=args.max_df, plot_fn=args.plot_fn,
          model=args.model, max_features=args.max_features, min_df=args.min_df,
-         n_keywords=args.n_keywords)
+         n_keywords=args.n_keywords, email=None)

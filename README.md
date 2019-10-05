@@ -49,8 +49,6 @@ ADvantage works in three modules:
 3. [Combinatorial optimization](#combinatorial-optimization)
 
 ###  Get similar content
-<img src="img/get_corpora.png" >
-
 Based on your landing page, ADvantage will use the GOOGLE API to search 
 for the top 100 similar web pages. ADvantage will then proceed to scrape
 the text and crawl the local links. The crawling process is repeated up
@@ -58,11 +56,29 @@ to depth 5 to  avoid spurious connections. Links pointing to javascript
 apps, mailtos, and web names with ideograms are ignored. The scraped 
 text is assembled into a corpus for further analysis
 
+
+<img src="img/get_corpora.png" >
+
 ### Extract keywords
 With the corpus assembled, ADvantage proceeds to remove stopwords 
 (including an extension to the one provided in most packages), 
 punctuation and non text characters. A Natural Language Processing (NLP)
 text summarization using TextRank is used to identify the keywords. 
+
+
+<img src="img/textrank.png" >
+
+TextRank works as follows:
+1. Compute the similarity matrix between sentences/words by 
+co-localization: If two words/sentences are found toguether more often,
+a one is inputted in the matrix.
+2. Assume the matrix as an adjacency matrix in an undirected (there are
+directed variations, such as PageRank, but `gensim` uses undirected) 
+graph. This graph will have nodes being words/sentences and edges being 
+colocalization of those words/sentences with the neighboring one
+3. Score: based on the centrality of each node (which one is the node 
+that best connect all others), the ranking is performed and the keywords
+are selected. Singletons (nodes that have no connections) are ignored.
 
 ### Combinatorial optimization
 The two steps above will give you a large set of keywords. Even if only 
@@ -71,6 +87,8 @@ hundreds. The question is then how can we get a basket of words that
 maximizes impressions and clicks, while minimizing the daily cost. 
 ADvantage uses a branch and bound solution to this combinatorial 
 optimization problem. In brief, branch and bound work by ...
+
+<img src="img/placeholder" >
 
 ## Credentials for third party API
 To get the apropriate statistics of the keywords, ADworks required the 

@@ -49,6 +49,11 @@ from ADvantage.scripts.__dataforseo_credentials__ import *
 plt.style.use('ggplot')
 
 # Constants -------------------------------------------------------------------
+INCLUDING_FILTER = ['NN', 'JJ', 'MD', 'VB', 'NP']
+EXCLUDING_FILTER = ['CC', 'CD', 'DT', 'EX', 'FW', 'IN', 'LS', 'MD' 'PD', 'PO',
+                    'UH']
+WINDOW_SIZE = 5
+
 parent_dir = dirname(dirname(abspath(__file__)))
 # Extend stop words with a custom file and punctuation
 with open(join(parent_dir, 'resources', 'stopwords.txt')) as stpw:
@@ -103,10 +108,13 @@ def pre_clean(text):
     text = re.sub("_.+\s", "", text)
     text = re.sub('\S*@\S*\s?', '', text)
     text = re.sub('\s+', ' ', text)
+    #remove repeated words
+    text = re.sub(r'\b(\w+\s*)\1{1,}', '\\1', text)
     # text to list removing stopwords
-    text = [x for x in simple_preprocess(text, deacc=True) if x not in
-            stopwords and len(x) != 1]
-    return ' '.join(text)
+    # text = [x for x in simple_preprocess(text, deacc=True) if x not in
+    #         stopwords and len(x) != 1]
+    # return ' '.join(text)
+    return text
 
 
 def get_stats(keywords, dfs_login, dfs_pass, label):
@@ -473,7 +481,9 @@ class IdentifyWords(object):
         ngrams = self.make_ngrams(cleaned, min_count, self.nlp)
         # ngrams = [self.make_ngrams(tokens, min_count, self.nlp) for tokens in
         #           cleaned if tokens]
-        self.__pre_keywords = [keywords(x, **self.opt) for x in ngrams]
+        self.__pre_keywords = list(set([(x[0].strip().replace('_', ' '), x[1])
+                                        for y in ngrams for x in keywords(
+                ' '.join(y), **self.opt)]))
 
     @property
     def landing_doc(self):

@@ -1,19 +1,39 @@
+import sys
 from os.path import dirname
 from os.path import join, abspath
+
 import numpy as np
 import pandas as pd
+from bokeh.core.properties import value
 from bokeh.io import curdoc
-from bokeh.layouts import column, row, grid
-from bokeh.models import ColumnDataSource, CustomJS, Span
+from bokeh.layouts import column, row
+from bokeh.models import ColumnDataSource, CustomJS
 from bokeh.models.widgets import Slider, Button, DataTable, TableColumn, \
     NumberFormatter, Div
-from bokeh.core.properties import value
 from bokeh.plotting import figure
 from bokeh.transform import dodge
 
 from ADvantage.scripts.knapsack import Knapsack
 
+# Constants -------------------------------------------------------------------
+cols = ['Keyword', 'daily_impressions_average', 'daily_clicks_average',
+        'ad_position_average', 'cpc_average', 'daily_cost_average', 'source']
+metric = cols[1:-1]
 
+# Path to files
+path = abspath(join(dirname(__file__), 'tmp'))
+# read output of scraping and stats
+full = pd.read_csv(sys.argv[1], usecols=cols)
+df = full.dropna()
+nan_idx = df.index
+nan_df = full[~full.index.isin(nan_idx)]
+minimum = min(df.daily_cost_average[df.daily_cost_average > 0])
+first_budget = max(minimum, 0.1)
+maximum = min(400, max(df.daily_cost_average))
+choice = ['GKP', 'Optimized']
+
+
+# Functions ###################################################################
 def optimize_values(data_frame, capacity):
     cost = data_frame.daily_cost_average.copy(deep=True)
     cost[cost == 0] = minimum / 10
@@ -25,24 +45,6 @@ def optimize_values(data_frame, capacity):
                        solve_type=5, name='Branch_n_bound')
     opt.get_results(print_it=True)
     return data_frame[data_frame.Keyword.isin(opt.packed_items)]
-
-
-cols = ['Keyword', 'ad_position_average', 'cpc_average',
-        'daily_clicks_average', 'daily_cost_average',
-        'daily_impressions_average', 'source']
-metric = cols[1:-1]
-
-# Path to files
-path = abspath(join(dirname(__file__), 'tmp'))
-# read output of scraping
-full = pd.read_csv(join(dirname(__file__), 'df_checkpoint.csv'), usecols=cols)
-df = full.dropna()
-nan_idx = df.index
-nan_df = full[~full.index.isin(nan_idx)]
-minimum = min(df.daily_cost_average[df.daily_cost_average > 0])
-first_budget = max(minimum, 0.1)
-maximum = min(400, max(df.daily_cost_average))
-choice = ['Top GKP', 'Random', 'Optimized']
 
 
 def set_table_source(dataframe):
@@ -57,20 +59,17 @@ def set_table_source(dataframe):
     return data, source
 
 
+# Body of app #################################################################
 data, source = set_table_source(df)
 
 data_missing, source_missing = set_table_source(nan_df)
-
-# #################
 current = optimize_values(df, first_budget)
 gkp = optimize_values(df[df.source == 'GKP'], first_budget)
 random = df.sample(current.shape[0])
-
-relabel = ['Ad Pos', 'CPC', 'Daily Clicks', 'Daily Cost', 'Daily impressions']
+relabel = ['Daily impressions', 'Daily Clicks', 'Ad Pos', 'CPC', 'Daily Cost']
 bar_data = {'metric': relabel,
             choice[0]: np.log([gkp[x].sum() for x in metric]),
-            choice[1]: np.log([random[x].sum() for x in metric]),
-            choice[2]: np.log([current[x].sum() for x in metric])}
+            choice[1]: np.log([current[x].sum() for x in metric])}
 
 bar_source = ColumnDataSource(data=bar_data)
 
@@ -79,35 +78,31 @@ p = figure(x_range=relabel, y_range=(-5, 15), plot_height=325,
            title='Relative Value change for baskets of words')
 p.vbar(x=dodge('metric', -0.25, range=p.x_range), top=choice[0], width=0.2,
        source=bar_source, color="#c9d9d3", legend=value(choice[0]))
-p.vbar(x=dodge('metric', 0.0, range=p.x_range), top=choice[1], width=0.2,
-       source=bar_source, color="#718dbf", legend=value(choice[1]))
-p.vbar(x=dodge('metric', 0.25, range=p.x_range), top=choice[2], width=0.2,
-       source=bar_source, color="#e84d60", legend=value(choice[2]))
+p.vbar(x=dodge('metric', 0.25, range=p.x_range), top=choice[1], width=0.2,
+       source=bar_source, color="#e84d60", legend=value(choice[1]))
 p.x_range.range_padding = 0.1
 p.xgrid.grid_line_color = None
 p.legend.location = "top_left"
 p.legend.orientation = "horizontal"
 p.yaxis.axis_label_text_font_size = '18pt'
 p.xaxis.axis_label_text_font_size = '18pt'
-# ######################
 
 
 def update():
     print('Slider Value', slider.value)
     current = optimize_values(df, slider.value)
     gkp = optimize_values(df[df.source == 'GKP'], slider.value)
-    random = df.sample(current.shape[0])
+    impressions = current.daily_impressions_average
     source.data = {'Keyword': current.Keyword,
                    'ad_position_average': current.ad_position_average,
                    'cpc_average': current.cpc_average,
                    'daily_clicks_average': current.daily_clicks_average,
                    'daily_cost_average': current.daily_cost_average,
-                   'daily_impressions_average': current.daily_impressions_average,
+                   'daily_impressions_average': impressions,
                    'source': current.source
                    }
     bar_data[choice[0]] = np.log([gkp[x].sum() for x in metric])
-    bar_data[choice[1]] = np.log([random[x].sum() for x in metric])
-    bar_data[choice[2]] = np.log([current[x].sum() for x in metric])
+    bar_data[choice[1]] = np.log([current[x].sum() for x in metric])
     bar_source.data = bar_data
 
 

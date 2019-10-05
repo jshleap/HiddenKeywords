@@ -1,9 +1,0 @@
-google_token = "8TLaMAUH63kVWRHA8D0N8w"
-google_client = "565-190-4905"
-google_API = 'AIzaSyAYuIZtLbI9ZjJfwZdwnfU6Wozha0OgNzw'
-Client_ID = '778532695491-n7bjt3v4iojn118lrrcvtenpaalospp4.apps.googleusercontent.com'
-Client_secret = 'qIF1QiY2B9ey9QVuPjXLm1JD'
-twitter_api = 'X2eFDDYZdFi4cJ7awxg8OvP0n'
-twitter_secret = 'sgwi1InITJPgCUIVh5R8pjoLJYfe4jn4Ss7hnNZNTwGntggjr9'
-twitter_token = '895007814703345664-BVZNx1yKvJbF8aNADjyvh0XRkxKALQF'
-twitter_token_secret = VXCaRAX7uf8cgy2HHPmEyLBSKeIuJSygqYYXgYAzTMezt

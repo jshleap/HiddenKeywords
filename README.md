@@ -41,7 +41,11 @@ identified, you can download the associated table for you to proceed
 with the campaign.
 
 ## Setup
-Lorem ipsum...
+To run it locally, you just need to type in a terminal:
+```
+python3 -m pip install advantage
+```
+
 ## How does it work?
 ADvantage works in three modules:
 1. [Get similar content](#get-similar-content)

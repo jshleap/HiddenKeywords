@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 from flask import Flask, render_template, request, flash, redirect
 from werkzeug.utils import secure_filename
-from ADvantage.scripts.gimmewords import main as gimme
+from ADvantage.scripts.locksmith import main as gimme
 import threading
 import os
 from subprocess import Popen

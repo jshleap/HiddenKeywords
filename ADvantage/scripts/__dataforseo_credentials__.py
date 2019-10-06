@@ -1,3 +1,3 @@
-dfs_login = 'jshleap@squalus.org'
-dfs_pass = 'jeZCjiKDblXtoiNO'
+dfs_login = ""
+dfs_pass = ""
 

@@ -6,7 +6,6 @@ __author__ = 'Jose Sergio Hleap'
 __version__ = '0.1b'
 __email__ = 'jshleap@gmail.com'
 
-from types import GeneratorType
 import argparse
 import json
 import multiprocessing
@@ -21,6 +20,7 @@ from json import dumps
 from json import loads
 from os.path import join, pardir, abspath, dirname, isfile
 from string import punctuation, whitespace
+from types import GeneratorType
 from urllib.parse import urlsplit
 
 import dask

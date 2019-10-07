@@ -6,49 +6,31 @@ __author__ = 'Jose Sergio Hleap'
 __version__ = '0.1b'
 __email__ = 'jshleap@gmail.com'
 
-import sys
 import argparse
-import json
 import multiprocessing
-import re
-import time
-from collections import deque
+import sys
 from os.path import isfile
-from io import BytesIO
-from string import punctuation, whitespace
+from os.path import pardir
 from types import GeneratorType
 
-import dask
 import dill
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-import requests
-import requests.exceptions
 import spacy
-from chardet.universaldetector import UniversalDetector
 from gensim.corpora import Dictionary
 from gensim.models import Word2Vec, wrappers, CoherenceModel
 from gensim.models.phrases import Phrases, Phraser
 from gensim.summarization import keywords, textcleaner
-from gensim.utils import simple_preprocess
-from googlesearch import search
-from nltk.corpus import stopwords
 from nltk.probability import FreqDist
 from nltk.tokenize import RegexpTokenizer
 from sklearn.feature_extraction.text import CountVectorizer, TfidfTransformer
-from ADvantage.scripts.__utils__ import *
-from ADvantage.scripts.__dataforseo_credentials__ import *
+
+from ADvantage.scripts._utils import *
 
 plt.style.use('ggplot')
 
 # Constants -------------------------------------------------------------------
-try:
-    assert dfs_pass != ""
-except AssertionError:
-    print('Remember to set your DATA FOR SEO login and password in '
-          '__dataforseo_credentials__.py')
-    sys.exit()
 INCLUDING_FILTER = ['NN', 'JJ', 'MD', 'VB', 'NP']
 EXCLUDING_FILTER = ['CC', 'CD', 'DT', 'EX', 'FW', 'IN', 'LS', 'MD' 'PD', 'PO',
                     'UH']
@@ -137,6 +119,7 @@ class IdentifyWords(object):
         :return: set landing document
         """
         return self.__landing_doc
+
     @landing_doc.setter
     def landing_doc(self, landing_doc):
         """
@@ -262,7 +245,7 @@ class IdentifyWords(object):
         bigram_mod = Phraser(bigram)
         trigram_mod = Phraser(trigram)
         ngrams = [list(set(bigram_mod[x] + trigram_mod[x])) for x in sent]
-        #ngrams = [x for y in ngrams for x in y if x not in stopwords]
+        # ngrams = [x for y in ngrams for x in y if x not in stopwords]
         try:
             if isinstance(ngrams[0], str):
                 out = [token.lemma_ for token in nlp(" ".join(ngrams))
@@ -341,7 +324,7 @@ class IdentifyWords(object):
 
 
 def main(text, land, max_df, min_df, max_features, n_keywords, model,
-         out_fn):
+         out_fn, prefix=''):
     """
     Main function to execute locksmith
     :param text: Filename of query documents to analyze
@@ -356,14 +339,21 @@ def main(text, land, max_df, min_df, max_features, n_keywords, model,
     :param model: Model to use. Available: tf_idf, lda, word2vec
     :return: List of keywords and instance of IdentifyKeywords
     """
-    with open(text) as txt, open(land) as lnd:
-        text = txt.read().strip()
-        land = lnd.read().strip()
+    if isinstance(text, str):
+        if isfile(text):
+            with open(text) as txt, open(land) as lnd:
+                text = txt.read().strip()
+                land = lnd.read().strip()
+    elif isinstance(text, list) or isinstance(text, str) or \
+            isinstance(text, tuple):
+        pass
+    else:
+        raise NotImplementedError
     iw = IdentifyWords(text, land, max_df, min_df, max_features,
                        n_keywords, model=model)
     if model is not None:
         iw.__getattribute__(model)()
-        with open('iw.pkcl', 'wb') as p:
+        with open('%s_iw.pkcl' % prefix, 'wb') as p:
             dill.dump(iw, p)
         if out_fn is not None:
             iw.frequency_explorer('%s_freq.pdf' % out_fn)
@@ -377,8 +367,9 @@ def main(text, land, max_df, min_df, max_features, n_keywords, model,
         # remove poorly connected keywords (likely unimportant)
         idx = [x > q for x in landing_page_rank]
         landing_keywords = np.array(landing_keywords)[idx].tolist()
-        inferred_keywords = [x[0] for y in iw.pre_keywords if y for x in y]
-        inferred_pagerank = [x[1] for y in iw.pre_keywords if y for x in y]
+        inferred_keywords, inferred_pagerank = zip(*iw.pre_keywords)
+        # inferred_keywords = [x[0] for y in iw.pre_keywords if y for x in y]
+        # inferred_keywords = [x[1] for y in iw.pre_keywords if y for x in y]
         new_q = np.quantile(inferred_pagerank, 0.25)
         inferred_idx = [x > new_q for x in inferred_pagerank]
         inferred_keywords = np.array(inferred_keywords)[inferred_idx].tolist()
@@ -388,7 +379,7 @@ def main(text, land, max_df, min_df, max_features, n_keywords, model,
         with open('%s_keywords.list' % out_fn, 'w') as kw:
             kw.write('\n'.join(combined))
 
-        return combined
+        return combined, iw
 
 
 if __name__ == '__main__':

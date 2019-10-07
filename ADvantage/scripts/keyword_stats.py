@@ -5,7 +5,7 @@ impressions
 **Copyright** 2019  Jose Sergio Hleap
 """
 # Imports ---------------------------------------------------------------------
-from ADvantage.scripts.__utils__ import *
+from ADvantage.scripts._utils import *
 import argparse
 from base64 import b64encode
 from http.client import HTTPSConnection
@@ -16,6 +16,7 @@ from os.path import isfile
 __author__ = 'Jose Sergio Hleap'
 __version__ = version
 __email__ = 'jshleap@gmail.com'
+
 
 # Utility Functions -----------------------------------------------------------
 def get_stats(keywords, dfs_login, dfs_pass, label):

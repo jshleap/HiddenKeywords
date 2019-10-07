@@ -5,24 +5,39 @@ those pages and return the concatenated text
 **Copyright** 2019  Jose Sergio Hleap
 """
 
-# Imports ---------------------------------------------------------------------
-from ADvantage.scripts.__utils__ import *
 import argparse
-from googlesearch import search
-from dask import delayed, compute
-from dask.diagnostics import ProgressBar
-from collections import deque
-from urllib.parse import urlsplit
-from bs4 import BeautifulSoup
 import time
-from tqdm import tqdm
+from collections import deque
 from os.path import isfile
+from urllib.parse import urlsplit
+
+from bs4 import BeautifulSoup
+from dask import delayed, compute
+from googlesearch import search
+from tqdm import tqdm
+
+# Imports ---------------------------------------------------------------------
+from ADvantage.scripts._utils import *
 
 # File Attributes -------------------------------------------------------------
 __author__ = 'Jose Sergio Hleap'
 __version__ = version
 __email__ = 'jshleap@gmail.com'
 
+
+# Utility functions -----------------------------------------------------------
+def to_str(x):
+    """
+    Transform to string
+    :param x: input to be join in string if iterable
+    :return: joined string
+    """
+    if x:
+        if not isinstance(x, str):
+            x = '\n'.join(x)
+    else:
+        raise Exception('Nothing in input')
+    return x
 
 # Main Classes ----------------------------------------------------------------
 class GetPages(object):
@@ -62,15 +77,14 @@ class GetPages(object):
         :param query: Requested query
         """
         # TODO: make it more generizable
-        if 'www' in query:
+        if ('www' in query) or ('/' in query) or ('.' in query):
             # query is the landing page
             url = next(self.gsearch)
             line = 'Crawling the landing page'
             print(line)
             print('=' * len(line))
-            with ProgressBar():
-                results = [delayed(self.read_url)(u) for u in self.crawl(url)]
-                out = compute(*results)
+            results = [delayed(self.read_url)(u) for u in self.crawl(url)]
+            out = compute(*results)
             self.__landing_page = ' '.join(out)
         else:
             self.__landing_page = None
@@ -91,10 +105,9 @@ class GetPages(object):
         line = 'Crawling Google results'
         print(line)
         print('=' * len(line))
-        with ProgressBar():
-            results = [delayed(self.search_google)(url) for url in
-                       self.gsearch]
-            out = compute(*results)
+        results = [delayed(self.search_google)(url) for url in
+                   self.gsearch]
+        out = compute(*results)
         self.__text, self.pages = zip(*out)
 
     def crawl(self, url):
@@ -124,7 +137,8 @@ class GetPages(object):
                 continue
             print("\tProcessing %s" % url)
             try:
-                response = requests.get(url)
+                response = requests.get(url, headers={'Accept-Encoding':
+                                                          'identity'})
             except(
                     requests.exceptions.MissingSchema,
                     requests.exceptions.ConnectionError,
@@ -198,7 +212,8 @@ class GetPages(object):
         headers = {'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X '
                                  '10_11_5) AppleWebKit/537.36 (KHTML, like '
                                  'Gecko) Chrome / 50.0.2661.102 Safari / '
-                                 '537.36'}
+                                 '537.36',
+                   'Accept-Encoding': 'identity'}
         try:
             req = requests.get(url, headers=headers)
             html_doc = req.content
@@ -207,10 +222,15 @@ class GetPages(object):
             try:
                 text = [simple_preprocess(x.get_text(), deacc=True)
                         for x in soup.find_all('main')]
+                if not text:
+                    return ''
+                if isinstance(text[0], list):
+                    text = [x for y in text for x in y if x]
                 return ' '.join(text)
-            except AttributeError:
+            except(AttributeError, IndexError) as e:
                 print(req.status_code)
                 print(html_doc)
+                raise e
         except(
                 requests.exceptions.MissingSchema,
                 requests.exceptions.ConnectionError,
@@ -220,22 +240,22 @@ class GetPages(object):
             return ''
 
 
-def main(query, outpath, max_results=100, depth=3):
-    page_file = join(outpath, 'pages.dmp')
-    land_file = join(outpath, 'landing.dmp')
+def main(query, outpath, max_results=100, depth=3, prefix=''):
+    page_file = join(outpath, '%s_pages.dmp' % prefix)
+    land_file = join(outpath, '%s_landing.dmp' % prefix)
     if isfile(page_file):
         with open(page_file) as p, open(land_file) as lf:
             text = [line for line in p]
             land = ' '.join([line for line in lf])
+        pages = None
     else:
         now = time.time()
         pages = GetPages(query, max_results, depth)
         elapsed = (time.time() - now) / 60
         print("Crawling done in", elapsed, 'minutes')
-        to_str = lambda x: x if isinstance(x, str) else '\n'.join(x)
         text = pages.text
         land = to_str(pages.landing_page)
-        with open(page_file, 'w') as p, open(page_file, 'w') as lf:
+        with open(page_file, 'w') as p, open(land_file, 'w') as lf:
             p.write(to_str(text))
             lf.write(land)
     return text, land, pages

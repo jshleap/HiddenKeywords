@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 from flask import Flask, render_template, request, flash, redirect
 from werkzeug.utils import secure_filename
-from ADvantage.scripts.locksmith import main as gimme
+from ADvantage.ad_vantage import ad_vantage
 import threading
 import os
 from subprocess import Popen
@@ -65,9 +65,10 @@ def upload_file():
             path2file = os.path.join(app.config['UPLOAD_FOLDER'], filename)
             file.save(path2file)
             flash('File successfully uploaded')
-            args = (landing, path2file, 100, 3, 0.9, 0.01, 100, 100, None,
-                    None)
-            execute_thread = threading.Thread(target=gimme, args=args)
+
+            args = (landing, path2file, 100, 3, 0.9, 0.01, 100, 100, user,
+                    None, None, None, email)
+            execute_thread = threading.Thread(target=ad_vantage, args=args)
             execute_thread.start()
             return get_index_page()
         else:

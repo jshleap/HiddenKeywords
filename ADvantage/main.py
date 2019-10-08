@@ -23,7 +23,7 @@ metric = cols[1:-1]
 # Path to files
 path = abspath(join(dirname(__file__), 'tmp'))
 # read output of scraping and stats
-full = pd.read_csv(sys.argv[1], usecols=cols)
+full = pd.read_csv(join(path, sys.argv[1]), usecols=cols)
 df = full.dropna()
 nan_idx = df.index
 nan_df = full[~full.index.isin(nan_idx)]

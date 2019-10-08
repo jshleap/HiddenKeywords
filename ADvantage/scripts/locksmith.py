@@ -106,11 +106,9 @@ class IdentifyWords(object):
                    self.clean_it(return_it=True)]
         min_count = max(1, int(len(cleaned) * self.min_df))
         ngrams = self.make_ngrams(cleaned, min_count, self.nlp)
-        # ngrams = [self.make_ngrams(tokens, min_count, self.nlp) for tokens in
-        #           cleaned if tokens]
-        self.__pre_keywords = list(set([(x[0].strip().replace('_', ' '), x[1])
-                                        for y in ngrams for x in keywords(
-                ' '.join(y), **self.opt)]))
+        kw = list(set([(x[0].strip().replace('_', ' '), x[1]) for y in ngrams
+                       for x in keywords(' '.join(y), **self.opt)]))
+        self.__pre_keywords = [x for x in kw if len(x) > 2]
 
     @property
     def landing_doc(self):
@@ -245,7 +243,6 @@ class IdentifyWords(object):
         bigram_mod = Phraser(bigram)
         trigram_mod = Phraser(trigram)
         ngrams = [list(set(bigram_mod[x] + trigram_mod[x])) for x in sent]
-        # ngrams = [x for y in ngrams for x in y if x not in stopwords]
         try:
             if isinstance(ngrams[0], str):
                 out = [token.lemma_ for token in nlp(" ".join(ngrams))

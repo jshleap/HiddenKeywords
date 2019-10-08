@@ -1,5 +1,5 @@
 from .__version__ import version
-from .scripts import _utils, __dataforseo_credentials__, critters, \
+from .scripts import _utils, __credentials__, critters, \
     keyword_stats, knapsack, locksmith
 
 name='ADvantage'
@@ -12,7 +12,7 @@ __version__ = version
 __all__ = [
     "__version__",
     "_utils",
-    "__dataforseo_credentials__",
+    "__credentials__.py",
     "critters",
     "keyword_stats",
     "knapsack",

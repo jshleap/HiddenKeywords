@@ -14,6 +14,7 @@ import requests
 import requests.exceptions
 from chardet.universaldetector import UniversalDetector
 from gensim.utils import simple_preprocess
+from nltk import download
 from nltk.corpus import stopwords
 
 
@@ -28,7 +29,11 @@ __email__ = 'jshleap@gmail.com'
 parent_dir = dirname(dirname(abspath(__file__)))
 # Extend stop words with a custom file and punctuation
 with open(join(parent_dir, 'resources', 'stopwords.txt')) as stpw:
-    stopwords = set(stopwords.words('english'))
+    try:
+        stopwords = set(stopwords.words('english'))
+    except LookupError:
+        download('stopwords')
+        stopwords = set(stopwords.words('english'))
     stopwords.update(simple_preprocess(stpw.read().strip().replace('\n', ' '),
                                        deacc=True))
     stopwords.update(list(whitespace) + list(punctuation))

@@ -6,14 +6,19 @@ using the branch and bound algorithm solve the combinatorial search of the best
 combination of words that minimizes cost while maximizing exposure.
 **Copyright** 2019  Jose Sergio Hleap
 """
+
 # Imports ---------------------------------------------------------------------
 from ADvantage.scripts._utils import *
 from ADvantage.scripts.keyword_stats import get_stats
 from ADvantage.scripts.critters import main as crawl
 from ADvantage.scripts.locksmith import main as locksmith
+from ADvantage.scripts.__credentials__ import PASSWORD, MY_ADDRESS
 from pandas import read_csv, concat
 from os.path import isfile
 import argparse
+import smtplib
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
 
 # File Attributes -------------------------------------------------------------
 __author__ = 'Jose Sergio Hleap'
@@ -21,6 +26,39 @@ __version__ = version
 __email__ = 'jshleap@gmail.com'
 
 
+# Utility functions -----------------------------------------------------------
+def send_email(email, url):
+    """
+    Send email containing the url with the bokeh dashboard
+
+    :param email: User email
+    :param url: url to dashboard
+    """
+    server = smtplib.SMTP(host='smtp-mail.outlook.com',
+                          port=587)  # TODO:change to gmail
+    server.starttls()
+    server.login(MY_ADDRESS, PASSWORD)
+    message = '''
+    Dear ADvantage User,
+    thank you for using this app, and I hope you find it useful. Please send
+    feedback through this email or through github (jshleap/ADvantage).
+    your bokeh dashboard is available at %s.
+    Make sure you save your exploration table since the dashboard will only be
+    availale for one view. Once you close it or it reaches one day it will be
+    erased.
+    
+    Thanks!
+    ''' % url
+    msg = MIMEMultipart()
+    msg['From'] = MY_ADDRESS
+    msg['To'] = email
+    msg['Subject'] = "ADvantage Results"
+    msg.attach(MIMEText(message, 'plain'))
+
+    server.send_message(msg)
+
+
+# Classes and main function ---------------------------------------------------
 class MissingCredentials(Exception):
     pass
 
@@ -48,7 +86,7 @@ def ad_vantage(query, stats, max_results, depth, max_df, min_df, max_features,
     :return: dataframe with keywords and their stats
     """
     if dfs_login is None:
-        from ADvantage.scripts.__dataforseo_credentials__ import dfs_login, \
+        from ADvantage.scripts.__credentials__ import dfs_login, \
             dfs_pass
         if dfs_login == '':
             raise MissingCredentials('Missing Data For SEO credentials')
@@ -79,6 +117,8 @@ def ad_vantage(query, stats, max_results, depth, max_df, min_df, max_features,
         df = read_csv(fn)
     if email is not None:
         # set bokeh server and send email
+        url= '?' # TODO: set bokeh server url
+        send_email(email, url)
         raise NotImplementedError
     return df
 

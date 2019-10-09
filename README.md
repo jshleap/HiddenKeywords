@@ -8,7 +8,7 @@ not available for the GKP ranking. The ADvantage app fills this gap by
 leveraging the information of your landing page, and links therein, to 
 search for related **current** content to construct an up-to-date text 
 corpora. It then uses Natural Language Processing (NLP) text 
-summarization through PageRank. This will leave you with two long sets of
+summarization through TextRank. This will leave you with two long sets of
 keywords: The GKP-suggested set, and the extended ADvantage set. 
 ADvantage go then to optimize the best basket of words to minimize your
 daily cost and cost per click (CPC), while maximizing daily impressions,

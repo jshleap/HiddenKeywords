@@ -34,7 +34,8 @@ choice = ['GKP', 'Optimized']
 
 
 # Functions ###################################################################
-def optimize_values(data_frame, capacity):
+def optimize_values(data_frame, capacity, label):
+    data_frame = data_frame.drop_duplicates(subset='Keyword')
     cost = data_frame.daily_cost_average.copy(deep=True)
     cost[cost == 0] = minimum / 10
     values = (data_frame.daily_impressions_average +
@@ -42,18 +43,19 @@ def optimize_values(data_frame, capacity):
     opt = Knapsack(items_names=data_frame.Keyword.to_list(),
                        values=values.to_list(), capacity=capacity,
                        weights=data_frame.daily_cost_average.tolist(),
-                       solve_type=5, name='Branch_n_bound')
+                       solve_type=5, name='Branch_n_bound_%s' % label)
     opt.get_results(print_it=True)
-    return data_frame[data_frame.Keyword.isin(opt.packed_items)]
+    df = data_frame[data_frame.Keyword.isin(opt.packed_items)]
+    return df
 
 
 def set_table_source(dataframe):
     data = {'Keyword': dataframe.Keyword,
+            'daily_impressions_average': dataframe.daily_impressions_average,
+            'daily_clicks_average': dataframe.daily_clicks_average,
             'ad_position_average': dataframe.ad_position_average,
             'cpc_average': dataframe.cpc_average,
-            'daily_clicks_average': dataframe.daily_clicks_average,
             'daily_cost_average': dataframe.daily_cost_average,
-            'daily_impressions_average': dataframe.daily_impressions_average,
             'source': dataframe.source}
     source = ColumnDataSource(data=data)
     return data, source
@@ -63,10 +65,11 @@ def set_table_source(dataframe):
 data, source = set_table_source(df)
 
 data_missing, source_missing = set_table_source(nan_df)
-current = optimize_values(df, first_budget)
-gkp = optimize_values(df[df.source == 'GKP'], first_budget)
+current = optimize_values(df, first_budget, 'current')
+gkp = optimize_values(df[df.source == 'GKP'], first_budget, 'gkp')
 random = df.sample(current.shape[0])
-relabel = ['Daily impressions', 'Daily Clicks', 'Ad Pos', 'CPC', 'Daily Cost']
+relabel = ['Daily impressions', 'Daily Clicks', 'Ad Position', 'CPC',
+           'Daily Cost']
 bar_data = {'metric': relabel,
             choice[0]: np.log([gkp[x].sum() for x in metric]),
             choice[1]: np.log([current[x].sum() for x in metric])}
@@ -90,15 +93,15 @@ p.xaxis.axis_label_text_font_size = '18pt'
 
 def update():
     print('Slider Value', slider.value)
-    current = optimize_values(df, slider.value)
-    gkp = optimize_values(df[df.source == 'GKP'], slider.value)
+    current = optimize_values(df, slider.value, 'current')
+    gkp = optimize_values(df[df.source == 'GKP'], slider.value, 'gkp')
     impressions = current.daily_impressions_average
     source.data = {'Keyword': current.Keyword,
+                   'daily_impressions_average': impressions,
+                   'daily_clicks_average': current.daily_clicks_average,
                    'ad_position_average': current.ad_position_average,
                    'cpc_average': current.cpc_average,
-                   'daily_clicks_average': current.daily_clicks_average,
                    'daily_cost_average': current.daily_cost_average,
-                   'daily_impressions_average': impressions,
                    'source': current.source
                    }
     bar_data[choice[0]] = np.log([gkp[x].sum() for x in metric])

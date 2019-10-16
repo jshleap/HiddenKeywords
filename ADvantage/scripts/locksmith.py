@@ -108,7 +108,7 @@ class IdentifyWords(object):
         ngrams = self.make_ngrams(cleaned, min_count, self.nlp)
         kw = list(set([(x[0].strip().replace('_', ' '), x[1]) for y in ngrams
                        for x in keywords(' '.join(y), **self.opt)]))
-        self.__pre_keywords = [x for x in kw if len(x) > 2]
+        self.__pre_keywords = [x for x in kw if len(x[0]) > 2]
 
     @property
     def landing_doc(self):

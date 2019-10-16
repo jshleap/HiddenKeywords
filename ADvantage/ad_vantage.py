@@ -34,8 +34,8 @@ def send_email(email, url):
     :param email: User email
     :param url: url to dashboard
     """
-    server = smtplib.SMTP(host='smtp-mail.outlook.com',
-                          port=587)  # TODO:change to gmail
+    server = smtplib.SMTP(host='smtp.gmail.com',
+                          port=587)
     server.starttls()
     server.login(MY_ADDRESS, PASSWORD)
     message = '''
@@ -111,13 +111,15 @@ def ad_vantage(query, stats, max_results, depth, max_df, min_df, max_features,
                   for x in y.split() if x.replace('_', ' ') not in
                   stopwords][:2500]
         df_gkp = get_stats(gkp_kw, dfs_login, dfs_pass, 'GKP')
-        df = concat([df_others, df_gkp], ignore_index=True)
+        diff = set(df_others.Keyword).difference(df_gkp)
+        df = concat([df_others[df_others.Keyword.isin(diff)], df_gkp],
+                    ignore_index=True)
         df.to_csv(fn, index=False)
     else:
         df = read_csv(fn)
     if email is not None:
         # set bokeh server and send email
-        url= '?' # TODO: set bokeh server url
+        url = '?' # TODO: set bokeh server url
         send_email(email, url)
         raise NotImplementedError
     return df

@@ -29,7 +29,8 @@ through web is available
 of the methods used by ADvantage
 5. [Credentials for third party API](#credentials-for-third-party-api):
 previous to setting up the app, make sure you have these credentials
-6. [I would love to hear from you](I-would-love-to-hear-from-you): The 
+6. [Basic usage](#basic-usage)
+7. [I would love to hear from you](I-would-love-to-hear-from-you): The 
 feedback section!
 
 ## Think of the cost
@@ -46,29 +47,35 @@ identified, you can download the associated table for you to proceed
 with the campaign.
 
 ## Local setup
-To run it locally, you just need to type in a terminal:
-```bash
-python3 -m pip install ad_vantage
-```
-Type `ad_vantage.py -h` to see help.
+<!--To run it locally, you just move to the folder with the setup.py script-->
+<!--and type in a terminal:-->
+<!--```bash-->
+<!--python3 setup.py install-->
+<!--```-->
+<!--Type `ad_vantage.py -h` to see help.-->
 
-Alternatively, you can clone this repo by:
+<!--Alternatively, you can clone this repo by:-->
+To run it locally, you have to type in a terminal 
 ```bash
-git clone ...
+git clone https://github.com/jshleap/ADvantage.git
 ```
-You then have to move to the ADvantage folder, and include it into your
-PYTHONATH:
+You then have to move to the ADvantage folder, and run the setup:
 ```bash
 cd ADvantage
-echo 'export PYTHONPATH=$PYTHONPATH:$PWD' >> ~/.bashrc
-source ~/.bashrc
+python3 setup.py install
 ```
+Then try `ad_vantage.py -h`. It it fails with a module not found error,
+add the ADvantage to your PYTHONPATH:
+```bash
+echo "export PYTHONPATH=$PYTHONPATH:$PWD" >> ~/.bashrc
+```
+
 This works in unix-like terminals such as linux and macs.
 
-## Using the web-App
-A front-end have been developed, but is very limited in the number of 
-queries that can be done. This service can be reached through [
-https://advantage.org](https://advantage.org)
+<!--## Using the web-App-->
+<!--A front-end have been developed, but is very limited in the number of -->
+<!--queries that can be done. This service can be reached through [-->
+<!--https://advantage.org](https://advantage.org)-->
 
 ## How does it work?
 ADvantage works in three modules:
@@ -121,12 +128,57 @@ optimization problem. In brief, branch and bound work by ...
 <img src="img/placeholder" >
 
 ## Credentials for third party API
-To get the apropriate statistics of the keywords, ADworks required the 
+To get the appropriate statistics of the keywords, ADworks required the 
 use of a third party (paid) API called [Data for SEO](www.dataforseo.com
 ). 
 In order to effectively use ADvantage, you need to create an account and
 provide the credentials at each call. 
 
+## Basic usage
+To use advantage, you will need to provide at least the url of your 
+landing page, the Google Keyword Planner output file, and your data for 
+SEO credentials. The latter can be either passed through the 
+`--dfs_login` (`-l`) and `--dfs_pass` (`-p`) options, or you need to 
+place a file called `__credentials__.py` in the scripts folder with the 
+following info:
+
+```python
+# Data for SEO credentials
+dfs_login = 'YOUR_LOGING_GOES_HERE'
+dfs_pass = 'YOUR_PASSWORD_GOES_HERE'
+```
+
+If you choose the first option, the most basic call will be:
+
+```bash
+ad_vantage.py <YOUR_LANDING_PAGE_URL> <YOUR_GPK_FILE> -l <YOUR_LOGING> \
+-p <YOUR_PASSWORD>
+```
+
+Changing all the variables between `<>` to your desired variables.
+
+If you have set the `__credentials__.py` file in the scripts folder, 
+then you just need to type:
+
+```bash
+ad_vantage.py <YOUR_LANDING_PAGE_URL> <YOUR_GPK_FILE>
+```
+
+Other option are available through the help command:
+
+```bash
+ad_vantage.py -h
+```
+
+Once the script have ran, you can see the dashboard by going into the 
+ADvantage folder and typing:
+
+```bash
+cd <PATH_TO_ADVANTAGE>
+bokeh serve --show ADvantage --args <ad_vantage.py_output>
+```
+
+Replacing the variables between the `<>` for your particular results.
 
 ## I would love to hear from you
 If you have any feedback feel free to open an issue in github or senf me

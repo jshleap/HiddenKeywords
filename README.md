@@ -151,7 +151,7 @@ dfs_pass = 'YOUR_PASSWORD_GOES_HERE'
 If you choose the first option, the most basic call will be:
 
 ```bash
-ad_vantage.py <YOUR_LANDING_PAGE_URL> <YOUR_GPK_FILE> -l <YOUR_LOGING> \
+ad_vantage.py <YOUR_LANDING_PAGE_URL> <YOUR_GPK_FILE> -l <YOUR_LOGIN> \
 -p <YOUR_PASSWORD>
 ```
 

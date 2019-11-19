@@ -1,0 +1,2 @@
+include ADvantage/resources/*.txt
+include ADvantage/resources/mallet-2.0.8/*

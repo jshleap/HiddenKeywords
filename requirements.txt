@@ -49,7 +49,7 @@ jupyter-core==4.5.0
 jupyterlab==1.0.2
 jupyterlab-server==1.0.0
 lockfile==0.12.2
-lxml==4.4.1
+lxml==4.6.5
 matplotlib==3.0.3
 more-itertools==7.0.0
 nbconvert==5.5.0

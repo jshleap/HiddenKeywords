@@ -106,7 +106,7 @@ traitlets==4.3.2
 uritemplate==3.0.0
 urllib3==1.24.3
 w3lib==1.21.0
-Werkzeug==0.15.6
+Werkzeug==2.2.3
 widgetsnbextension==3.5.0
 xarray==0.12.1
 xlrd==1.2.0
